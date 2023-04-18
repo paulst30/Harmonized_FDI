@@ -104,6 +104,8 @@ train_data_tdiff <- working_data_wm %>%
   filter(!is.na(diff_inBMD4_outBMD4)) %>%                            #& OUT_BMD4!=0 & IN_BMD4!=0 & OUT_BMD4<10000)
   select(-s_iso3c,-r_iso3c,-year,-IN_BMD4,-diff_inBMD4_outBMD4)
 
+dep_tdiff <- working_data_wm %>%  filter(!is.na(diff_inBMD4_outBMD4)) %>% select(diff_inBMD4_outBMD4, s_iso3c, r_iso3c, year)
+
 #one-hot endcoding
 xgb_train_num <- train_data_tdiff %>% select(where(is.numeric))
 xgb_train_fac <- train_data_tdiff %>% select(where(is.factor))
@@ -119,6 +121,8 @@ xgb_train_tdiff_sp <- as(xgb_train_tdiff, "dgCMatrix")
 train_data_difffellow <- working_data_wm %>% 
   filter(!is.na(diff_fellow)) %>%                            #& OUT_BMD4!=0 & IN_BMD4!=0 & OUT_BMD4<10000)
   select(-s_iso3c,-r_iso3c,-year,-IN_BMD4,-diff_fellow)
+
+dep_difffellow <- working_data_wm %>%  filter(!is.na(diff_fellow)) %>% select(diff_fellow, s_iso3c, r_iso3c, year)
 
 #one-hot endcoding
 xgb_train_num <- train_data_difffellow %>% select(where(is.numeric))

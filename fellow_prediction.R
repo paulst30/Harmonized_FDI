@@ -1,75 +1,3 @@
-#XGboost
-
-#install.packages("drat", repos="https://cran.rstudio.com")
-#drat:::addRepo("dmlc")
-#install.packages("xgboost", repos="http://dmlc.ml/drat/", type = "source")
-#install.packages("xgboost")
-#install.packages("Matrix")
-#install.packages("party")
-#install.packages("partykit")
-
-library(xgboost)
-library(partykit)
-
-
-########################prepare data for training##############################
-
-working_data_wm <- data %>% select(s_iso3c, r_iso3c, year, diff_inBMD4_outBMD4, re_diff_inBMD4_outBMD4, 
-                                   IN_BMD4,OUT_BMD4, rownames(coverage_30), re_OUT_BMD4,
-                                   -Type, -re_IMF_IN, -re_OECD_IN_BMD4, diff_fellow) %>%
-  mutate(fel_diff=IN_BMD4-OUT_BMD4+re_IN_BMD4-re_OUT_BMD4) %>%
-  mutate_if(is.character, as.factor) %>%
-  group_by(s_iso3c, r_iso3c) %>%
-  mutate( lag1_diff = lag(diff_inBMD4_outBMD4, n=1, default=NA,order_by = year),
-          lag2_diff = lag(diff_inBMD4_outBMD4, n=2, default=NA,order_by = year),
-          lag3_diff = lag(diff_inBMD4_outBMD4, n=3, default=NA,order_by = year),
-          lag4_diff = lag(diff_inBMD4_outBMD4, n=4, default=NA,order_by = year),
-          lead1_diff = lead(diff_inBMD4_outBMD4, n=1, default=NA, order_by = year),
-          lead2_diff = lead(diff_inBMD4_outBMD4, n=2, default=NA, order_by = year),
-          lead3_diff = lead(diff_inBMD4_outBMD4, n=3, default=NA, order_by = year),
-          lead4_diff = lead(diff_inBMD4_outBMD4, n=4, default=NA, order_by = year),
-          lag1_rediff = lag(re_diff_inBMD4_outBMD4, n=1, default=NA,order_by = year),
-          lag2_rediff = lag(re_diff_inBMD4_outBMD4, n=2, default=NA,order_by = year),
-          lag3_rediff = lag(re_diff_inBMD4_outBMD4, n=3, default=NA,order_by = year),
-          lag4_rediff = lag(re_diff_inBMD4_outBMD4, n=4, default=NA,order_by = year),
-          lead1_rediff = lead(re_diff_inBMD4_outBMD4, n=1, default=NA, order_by = year),
-          lead2_rediff = lead(re_diff_inBMD4_outBMD4, n=2, default=NA, order_by = year),
-          lead3_rediff = lead(re_diff_inBMD4_outBMD4, n=3, default=NA, order_by = year),
-          lead4_rediff = lead(re_diff_inBMD4_outBMD4, n=4, default=NA, order_by = year)
-  ) %>%
-  ungroup()
-
-working_data_summary <- working_data_wm %>% filter(is.na(diff_fellow)) %>%
-  summarize(lag1diff_f=sum(!is.na(lag1_diff_f)),
-            lag2diff_f=sum(!is.na(lag2_diff_f)),
-            lag3diff_f=sum(!is.na(lag3_diff_f)),
-            lag4diff_f=sum(!is.na(lag4_diff_f)),
-            lag1diff=sum(!is.na(lag1_diff)),
-            lag2diff=sum(!is.na(lag2_diff)),
-            lag3diff=sum(!is.na(lag3_diff)),
-            lag4diff=sum(!is.na(lag4_diff)))
-
-
-
-###############Training data################
-training_data_wm <- working_data_wm %>% filter(!is.na(diff_fellow))
-
-#exclude variables that should not be used for prediction
-train_data_wm <- training_data_wm %>% select(-s_iso3c,-r_iso3c, -diff_fellow)
-
-#one-hot endcoding
-xgb_train_num <- train_data_wm %>% select(where(is.numeric))
-xgb_train_fac <- train_data_wm %>% select(where(is.factor))
-xgb_dummy <- dummyVars(" ~ .", data = xgb_train_fac)
-xgb_single_answers <- as.data.frame(predict(xgb_dummy, newdata = xgb_train_fac))
-
-#combine to xgb Matrix
-xgb_train <- cbind(xgb_train_num, xgb_single_answers) %>% as.matrix()
-xgb_train_sp <- as(xgb_train, "dgCMatrix")
-
-#xgb_train_label <- training_data_wm$diff_inBMD4_outBMD4 %>% as.matrix()
-#xgb_train <- xgb.DMatrix(data = xgb_train, label = xgb_train_label ) #combining matrix and label to xgb matrix
-
 
 #### preparation of cv-fold ##### 
 
@@ -82,8 +10,8 @@ fitControl <- trainControl(method = "repeatedcv",    # method for resampling
 
 #defines the tuning Grid
 customGrid <-  expand.grid(nrounds = c(200), 
-                           max_depth = c(8), 
-                           eta = c(0.2),
+                           max_depth = c(4), 
+                           eta = c(0.3),
                            gamma = 0,
                            colsample_bytree = 1,
                            min_child_weight = 0,
@@ -94,8 +22,8 @@ customGrid <-  expand.grid(nrounds = c(200),
 
 
 # k-fold crossvalidated boosted tree
-boostcv <- train(y = training_data_wm$diff_fellow, 
-                 x = xgb_train_sp, 
+boost_fdiff_cv <- train(y = dep_difffellow$diff_fellow, 
+                 x = xgb_train_difffellow_sp, 
                  method = "xgbTree", 
                  trControl = fitControl,
                  tuneGrid = customGrid,
@@ -117,8 +45,8 @@ customGrid <-  expand.grid(nrounds = 1,
                            subsample = c(0.5)
 )
 
-forestcv <- train(y = training_data_wm$diff_fellow, 
-                  x = xgb_train_sp, 
+forest_fdiff_cv <- train(y = dep_difffellow$diff_fellow, 
+                  x = xgb_train_difffellow_sp, 
                   method = "xgbTree", 
                   trControl = fitControl,
                   tuneGrid = customGrid,
@@ -132,23 +60,26 @@ forestcv <- train(y = training_data_wm$diff_fellow,
 
 
 
-prediction_all <-data.frame(s_iso3c = training_data_wm$s_iso3c,
-                            r_iso3c = training_data_wm$r_iso3c,
-                            year = training_data_wm$year,
-                            diff = training_data_wm$diff_fellow)
+prediction_train_fdiff <-data.frame(s_iso3c = dep_difffellow$s_iso3c,
+                                    r_iso3c = dep_difffellow$r_iso3c,
+                                       year = dep_difffellow$year,
+                                       diff = dep_difffellow$diff_fellow)
 
 # save predictions from cv-model
-#final_boost_pred <- data.frame(rowIndex= boostcv$pred$rowIndex[boostcv$pred$nrounds==1000 & boostcv$pred$max_depth==4 & boostcv$pred$eta==0.1],
-#                               pred= boostcv$pred$pred[boostcv$pred$nrounds==1000 & boostcv$pred$max_depth==4 & boostcv$pred$eta==0.1])
+boost_fdiff_pred <- data.frame(rowIndex= boost_fdiff_cv$pred$rowIndex[boost_fdiff_cv$pred$nrounds==200 & boost_fdiff_cv$pred$max_depth==4 & boost_fdiff_cv$pred$eta==0.3],
+                               pred= boost_fdiff_cv$pred$pred[boost_fdiff_cv$pred$nrounds==200 & boost_fdiff_cv$pred$max_depth==4 & boost_fdiff_cv$pred$eta==0.3])
 
-#final_forest_pred <- data.frame(rowIndex= forestcv$pred$rowIndex[forestcv$pred$nrounds==1000 & forestcv$pred$max_depth==4 & forestcv$pred$eta==0.1],
-#                                pred= forestcv$pred$pred[forestcv$pred$nrounds==1000 & forestcv$pred$max_depth==4 & forestcv$pred$eta==0.1])
+forest_fdiff_pred <- data.frame(rowIndex= forest_fdiff_cv$pred$rowIndex[forest_fdiff_cv$pred$nrounds==1 & forest_fdiff_cv$pred$max_depth==20 & forest_fdiff_cv$pred$eta==1],
+                                pred= forest_fdiff_cv$pred$pred[forest_fdiff_cv$pred$nrounds==1 & forest_fdiff_cv$pred$max_depth==20 & forest_fdiff_cv$pred$eta==1])
 
-prediction_all$boost[boostcv$pred$rowIndex] <- boostcv$pred$pred      
-prediction_all$forest[forestcv$pred$rowIndex] <- forestcv$pred$pred
+# combine with dependent variable
+prediction_train_fdiff$boost[boost_fdiff_pred$rowIndex] <- boost_fdiff_pred$pred      
+prediction_train_fdiff$forest[forest_fdiff_pred$rowIndex] <- forest_fdiff_pred$pred
+
+#################measure and compare performance###############################
 
 #performance measurement
-prediction_summary <- prediction_all %>% pivot_longer(cols = c(boost, forest), names_to = "method", values_to = "prediction") %>%
+prediction_summary_fdiff <- prediction_train_fdiff %>% pivot_longer(cols = c(boost, forest), names_to = "method", values_to = "prediction") %>%
   group_by(method) %>%
   summarize(rmse = round(sqrt(mean((diff-prediction)^2)), digits = 0),
             mae = round(mean(sqrt((diff-prediction)^2)), digits = 0),
@@ -156,16 +87,13 @@ prediction_summary <- prediction_all %>% pivot_longer(cols = c(boost, forest), n
             N = n())
 
 #quintile performance
-quin_perf_fellow <- prediction_all %>% 
-  mutate(quintile = ntile(prediction, 10)) %>%
+quin_perf_fdiff <- prediction_train_fdiff %>% 
+  mutate(quintile = ntile(boost, 10)) %>%
   group_by(quintile) %>%
   summarise(
-    min = min(prediction),
-    max = max(prediction),
-    Errorred = round(1-(sum(abs(diff-prediction), na.rm=T))/sum(abs(diff), na.rm=T), digits=2),
-    pRsquared = round(1-(sum((diff-prediction)^2, na.rm=T)/sum((diff)^2, na.rm=T)), digits=2)
+    min = min(boost),
+    max = max(boost),
+    Errorred = round(1-(sum(abs(diff-boost), na.rm=T))/sum(abs(diff), na.rm=T), digits=2),
+    pRsquared = round(1-(sum((diff-boost)^2, na.rm=T)/sum((diff)^2, na.rm=T)), digits=2)
   )
-print(quin_perf_fellow) 
-
-
-ggplot(data=prediction_all) + geom_point(aes(x=prediction, y=diff))
+print(quin_perf_fdiff)

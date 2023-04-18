@@ -1,38 +1,3 @@
-#XGboost
-
-#install.packages("drat", repos="https://cran.rstudio.com")
-#drat:::addRepo("dmlc")
-#install.packages("xgboost", repos="http://dmlc.ml/drat/", type = "source")
-#install.packages("xgboost")
-#install.packages("Matrix")
-#install.packages("party")
-#install.packages("partykit")
-
-library(xgboost)
-library(partykit)
-
-
-########################prepare data for training##############################
-
-
-
-###############Training data################
-#exclude variables that should not be used for prediction
-train_data_wm <- training_data_wm %>% select(-s_iso3c,-r_iso3c,-year,-IN_BMD4 , -diff_inBMD4_outBMD4)
-
-#one-hot endcoding
-xgb_train_num <- train_data_wm %>% select(where(is.numeric))
-xgb_train_fac <- train_data_wm %>% select(where(is.factor))
-xgb_dummy <- dummyVars(" ~ .", data = xgb_train_fac)
-xgb_single_answers <- as.data.frame(predict(xgb_dummy, newdata = xgb_train_fac))
-
-#combine to xgb Matrix
-xgb_train <- cbind(xgb_train_num, xgb_single_answers) %>% as.matrix()
-xgb_train_sp <- as(xgb_train, "dgCMatrix")
-
-#xgb_train_label <- training_data_wm$diff_inBMD4_outBMD4 %>% as.matrix()
-#xgb_train <- xgb.DMatrix(data = xgb_train, label = xgb_train_label ) #combining matrix and label to xgb matrix
-
 
 #### preparation of cv-fold ##### 
 
@@ -53,12 +18,13 @@ customGrid <-  expand.grid(nrounds = c(200, 500, 1000),
                            subsample = c(0.4)
                            )
 
+
 #nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
 
 
 # k-fold crossvalidated boosted tree
-boostcv <- train(y = training_data_wm$diff_inBMD4_outBMD4, 
-                 x = xgb_train_sp, 
+boost_tdiff_cv <- train(y = dep_tdiff$diff_inBMD4_outBMD4, 
+                 x = xgb_train_tdiff_sp, 
                  method = "xgbTree", 
                  trControl = fitControl,
                  tuneGrid = customGrid,
@@ -80,8 +46,8 @@ customGrid <-  expand.grid(nrounds = 1,
                            subsample = c(0.5)
 )
 
-forestcv <- train(y = training_data_wm$diff_inBMD4_outBMD4, 
-                  x = xgb_train_sp, 
+forest_tdiff_cv <- train(y = dep_tdiff$diff_inBMD4_outBMD4, 
+                  x = xgb_train_tdiff_sp, 
                   method = "xgbTree", 
                   trControl = fitControl,
                   tuneGrid = customGrid,
@@ -93,40 +59,45 @@ forestcv <- train(y = training_data_wm$diff_inBMD4_outBMD4,
                   verbose = FALSE
 )
 
-
-
-prediction_all <-data.frame(s_iso3c = training_data_wm$s_iso3c,
-                            r_iso3c = training_data_wm$r_iso3c,
-                            year = training_data_wm$year,
-                            diff = training_data_wm$diff_inBMD4_outBMD4)
+#save out-of-sample predictions
+prediction_train_tdiff <-data.frame(s_iso3c = dep_tdiff$s_iso3c,
+                            r_iso3c = dep_tdiff$r_iso3c,
+                            year = dep_tdiff$year,
+                            diff = dep_tdiff$diff_inBMD4_outBMD4)
 
 # save predictions from cv-model
-final_boost_pred <- data.frame(rowIndex= boostcv$pred$rowIndex[boostcv$pred$nrounds==1000 & boostcv$pred$max_depth==4 & boostcv$pred$eta==0.1],
-                               pred= boostcv$pred$pred[boostcv$pred$nrounds==1000 & boostcv$pred$max_depth==4 & boostcv$pred$eta==0.1])
+boost_tdiff_pred <- data.frame(rowIndex= boost_tdiff_cv$pred$rowIndex[boost_tdiff_cv$pred$nrounds==200 & boost_tdiff_cv$pred$max_depth==4 & boost_tdiff_cv$pred$eta==0.3],
+                               pred= boost_tdiff_cv$pred$pred[boost_tdiff_cv$pred$nrounds==200 & boost_tdiff_cv$pred$max_depth==4 & boost_tdiff_cv$pred$eta==0.3])
 
-#final_forest_pred <- data.frame(rowIndex= forestcv$pred$rowIndex[forestcv$pred$nrounds==1000 & forestcv$pred$max_depth==4 & forestcv$pred$eta==0.1],
-                                pred= forestcv$pred$pred[forestcv$pred$nrounds==1000 & forestcv$pred$max_depth==4 & forestcv$pred$eta==0.1])
+forest_tdiff_pred <- data.frame(rowIndex= forest_tdiff_cv$pred$rowIndex[forest_tdiff_cv$pred$nrounds==1 & forest_tdiff_cv$pred$max_depth==20 & forest_tdiff_cv$pred$eta==1],
+                                pred= forest_tdiff_cv$pred$pred[forest_tdiff_cv$pred$nrounds==1 & forest_tdiff_cv$pred$max_depth==20 & forest_tdiff_cv$pred$eta==1])
 
-prediction_all$prediction[final_boost_pred$rowIndex] <- final_boost_pred$pred      
-prediction_all$prediction_f[forestcv$pred$rowIndex] <- forestcv$pred$pred
+# combine with dependent variable
+prediction_train_tdiff$boost[boost_tdiff_pred$rowIndex] <- boost_tdiff_pred$pred      
+prediction_train_tdiff$forest[forest_tdiff_pred$rowIndex] <- forest_tdiff_pred$pred
+
+#################measure and compare performance###############################
+
+#performance measurement
+prediction_summary_tdiff <- prediction_train_tdiff %>% pivot_longer(cols = c(boost, forest), names_to = "method", values_to = "prediction") %>%
+  group_by(method) %>%
+  summarize(rmse = round(sqrt(mean((diff-prediction)^2)), digits = 0),
+            mae = round(mean(sqrt((diff-prediction)^2)), digits = 0),
+            pseudo_rsq = round(1-(sum((diff-prediction)^2)/sum((diff)^2)), digits=3),
+            N = n())
+
+#quintile performance
+quin_perf_tdiff <- prediction_train_tdiff %>% 
+  mutate(quintile = ntile(boost, 10)) %>%
+  group_by(quintile) %>%
+  summarise(
+    min = min(boost),
+    max = max(boost),
+    Errorred = round(1-(sum(abs(diff-boost), na.rm=T))/sum(abs(diff), na.rm=T), digits=2),
+    pRsquared = round(1-(sum((diff-boost)^2, na.rm=T)/sum((diff)^2, na.rm=T)), digits=2)
+  )
+print(quin_perf_tdiff)
 
 
 
 
-######MOB tree#######
-mob_train_complete <- working_data_wm %>% select(IN_BMD4, OUT_BMD4, starts_with("r_IMF"), starts_with("s_IMF")) %>%
-                            filter(!is.na(IN_BMD4) & !is.na(OUT_BMD4))
-mob_train <- mob_train_complete[sample1,]
-mob_test <- mob_train_complete[-sample1,]
-
-mobtree <- lmtree(IN_BMD4 ~ OUT_BMD4 | ., data=mob_train, minbucket=50, mtry=10)
-prediction_mob <- predict(mobtree, newdata=mob_test)
-
-os_resid_mob <- mob_test$IN_BMD4-prediction_mob
-rmse_mob <- round(sqrt(mean(os_resid_mob^2)), digits = 0)
-mae_mob <- round(mean(sqrt(os_resid_mob^2)), digits = 0)
-
-graph_mob <-cbind(IN_BMD4=mob_test$IN_BMD4,
-                       prediction=prediction_mob) %>% as.data.frame()
-
-ggplot(data = graph_mob) + geom_jitter(aes( x=prediction, y=IN_BMD4))
