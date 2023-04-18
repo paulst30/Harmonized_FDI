@@ -98,6 +98,32 @@ quin_perf_tdiff <- prediction_train_tdiff %>%
   )
 print(quin_perf_tdiff)
 
+#graphical analysis of the performance
+
+graph_data_tdiff <- data %>% select(s_iso3c, r_iso3c, year, group_id, IN_BMD4, OUT_BMD4, fin_center) %>%
+                             merge(prediction_train_tdiff, by = c("s_iso3c", "r_iso3c", "year"), y.all = T ) %>%
+                             mutate(adj_OUT_BMD4=OUT_BMD4+boost, 
+                                    rel_error2=2*abs(IN_BMD4-OUT_BMD4)/(abs(IN_BMD4)+abs(OUT_BMD4)),
+                                    adj_rel_error2=2*abs(IN_BMD4-adj_OUT_BMD4)/(abs(IN_BMD4)+abs(adj_OUT_BMD4)))
+
+# graph Inward versus outward, distinction by fin_center, comparison to prediction
+diff1 <- ggplot(data = graph_data_tdiff) + geom_jitter(aes(y=IN_BMD4, x=OUT_BMD4, color=rel_error2)) +
+                                     facet_wrap(~ fin_center, ncol = 2) #+
+#coord_cartesian(xlim=c(-500,1000), ylim =c(-500,1000) )
+#labs(title = "Differences between inward and outward stocks",
+#      caption = "N=XX")
+adjust1 <- ggplot(data = graph_data_tdiff) + geom_jitter(aes(y=IN_BMD4, x=adj_OUT_BMD4, color=adj_rel_error2)) +
+                                       facet_wrap(~ fin_center, ncol = 2) #+
+# coord_cartesian(xlim=c(-500,1000), ylim =c(-500,1000) )
+plot_grid(diff1, adjust1, nrow = 2)                            
+
+
+#graph histogram of rel measurement error
+hist_diff1 <- ggplot(data = graph_data_tdiff) + geom_histogram(aes(x=rel_error2, y=after_stat(count/sum(count)*100))) +
+  facet_wrap(~ fin_center, ncol = 2) 
+hist_adjust1 <- ggplot(data =graph_data_tdiff) + geom_histogram(aes(x=adj_rel_error2, y=after_stat(count/sum(count)*100))) +
+  facet_wrap(~ fin_center, ncol = 2) 
+plot_grid(hist_diff1, hist_adjust1, nrow = 2)
 
 
 

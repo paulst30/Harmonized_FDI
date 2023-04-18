@@ -97,3 +97,13 @@ quin_perf_fdiff <- prediction_train_fdiff %>%
     pRsquared = round(1-(sum((diff-boost)^2, na.rm=T)/sum((diff)^2, na.rm=T)), digits=2)
   )
 print(quin_perf_fdiff)
+
+
+#graphical analysis of the performance
+graph_data_fdiff <- data %>% select(s_iso3c, r_iso3c, year, fin_center) %>%
+  merge(prediction_train_fdiff, by = c("s_iso3c", "r_iso3c", "year"), y.all = T )
+
+# graph Inward versus outward, distinction by fin_center, comparison to prediction
+fdiff_graph <- ggplot(data = graph_data_fdiff) + geom_jitter(aes(y=diff, x=boost)) +
+  facet_wrap(~ fin_center, ncol = 2) 
+

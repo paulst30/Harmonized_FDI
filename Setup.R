@@ -15,6 +15,7 @@
 #install.packages("xtable")
 #install.packages("xgboost")
 #install.packages("Matrix")
+#install.packages("cowplot")
 
 library(tidyverse)
 library(ggplot2)
@@ -34,6 +35,7 @@ library(mlbench)
 library(xtable)
 library(xgboost)
 library(Matrix)
+library(cowplot)
 
 #read in Stata data
 data <- read_dta('quality_analysis_ml_data.dta')
