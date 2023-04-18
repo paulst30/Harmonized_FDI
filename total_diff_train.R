@@ -38,7 +38,7 @@ xgb.save(boost_tdiff_cv$finalModel, "boost_tdiff.model")
 
 # k-fold crossvalidated forest
 customGrid <-  expand.grid(nrounds = 1, 
-                           max_depth = 20, 
+                           max_depth = c(20,30), 
                            eta = 1,
                            gamma = 0,
                            colsample_bytree = 1,
@@ -55,7 +55,7 @@ forest_tdiff_cv <- train(y = dep_tdiff$diff_inBMD4_outBMD4,
                   objective = "reg:squarederror",       #can be changed to "pseudohubererror"
                   tree_method = "approx",
                   colsample_bynode= 0.5,              # Share of random columns (features) used to fit one node
-                  num_parallel_tree = 200,              # Number of trees fitted per round -> can be used to simulate RF
+                  num_parallel_tree = 300,              # Number of trees fitted per round -> can be used to simulate RF
                   verbose = FALSE
 )
 xgb.save(forest_tdiff_cv$finalModel, "forest_tdiff.model") 

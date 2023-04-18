@@ -9,9 +9,9 @@ fitControl <- trainControl(method = "repeatedcv",    # method for resampling
 )
 
 #defines the tuning Grid
-customGrid <-  expand.grid(nrounds = c(200), 
-                           max_depth = c(4), 
-                           eta = c(0.3),
+customGrid <-  expand.grid(nrounds = c(200, 500, 1000), 
+                           max_depth = c(4,8,10), 
+                           eta = c(0.1, 0.2, 0.3),
                            gamma = 0,
                            colsample_bytree = 1,
                            min_child_weight = 0,
@@ -37,7 +37,7 @@ xgb.save(boost_fdiff_cv$finalModel, "boost_tdiff.model")
 
 # k-fold crossvalidated forest
 customGrid <-  expand.grid(nrounds = 1, 
-                           max_depth = 20, 
+                           max_depth = c(20,30), 
                            eta = 1,
                            gamma = 0,
                            colsample_bytree = 1,
@@ -54,7 +54,7 @@ forest_fdiff_cv <- train(y = dep_difffellow$diff_fellow,
                   objective = "reg:squarederror",       #can be changed to "pseudohubererror"
                   tree_method = "approx",
                   colsample_bynode= 0.5,              # Share of random columns (features) used to fit one node
-                  num_parallel_tree = 200,              # Number of trees fitted per round -> can be used to simulate RF
+                  num_parallel_tree = 300,              # Number of trees fitted per round -> can be used to simulate RF
                   verbose = FALSE
 )
 xgb.save(forest_fdiff_cv$finalModel, "forest_tdiff.model")
