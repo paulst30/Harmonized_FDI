@@ -32,7 +32,7 @@ boost_fdiff_cv <- train(y = dep_difffellow$diff_fellow,
                  tree_method = "approx",
                  verbose = FALSE
 )
-#xgb.save(boostcv$finalModel, "xgboost.model") 
+xgb.save(boost_fdiff_cv$finalModel, "boost_tdiff.model")
 
 
 # k-fold crossvalidated forest
@@ -57,7 +57,7 @@ forest_fdiff_cv <- train(y = dep_difffellow$diff_fellow,
                   num_parallel_tree = 200,              # Number of trees fitted per round -> can be used to simulate RF
                   verbose = FALSE
 )
-
+xgb.save(forest_fdiff_cv$finalModel, "forest_tdiff.model")
 
 
 prediction_train_fdiff <-data.frame(s_iso3c = dep_difffellow$s_iso3c,
