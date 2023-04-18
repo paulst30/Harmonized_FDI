@@ -92,11 +92,6 @@ working_data_wm <- data %>% select(s_iso3c, r_iso3c, year, diff_inBMD4_outBMD4, 
   ) %>%
   ungroup()
 
-#partition into training data and prediction data
-training_data_wm <- working_data_wm %>% 
-  filter(!is.na(diff_inBMD4_outBMD4)) #& OUT_BMD4!=0 & IN_BMD4!=0 & OUT_BMD4<10000)                # will be used to build training and validation data
-prediction_data_wm <- working_data_wm  %>%
-  filter(!is.na(OUT_BMD4) & is.na(IN_BMD4)) #& OUT_BMD4!=0 & OUT_BMD4<10000 )         #select observations that only have outward FDI stocks
 
 ###############Training data################
 
