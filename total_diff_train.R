@@ -33,7 +33,8 @@ boost_tdiff_cv <- train(y = dep_tdiff$diff_inBMD4_outBMD4,
                  tree_method = "approx",
                  verbose = FALSE
                  )
-xgb.save(boost_tdiff_cv$finalModel, "boost_tdiff.model") 
+xgb.save(boost_tdiff_cv$finalModel, "boost_tdiff.model")
+importance_boost_tdiff <- varImp(boost_tdiff_cv)
 
 
 # k-fold crossvalidated forest
@@ -58,7 +59,9 @@ forest_tdiff_cv <- train(y = dep_tdiff$diff_inBMD4_outBMD4,
                   num_parallel_tree = 300,              # Number of trees fitted per round -> can be used to simulate RF
                   verbose = FALSE
 )
-xgb.save(forest_tdiff_cv$finalModel, "forest_tdiff.model") 
+xgb.save(forest_tdiff_cv$finalModel, "forest_tdiff.model")
+importance_forest_tdiff <- varImp(forest_tdiff_cv)
+
 
 #save out-of-sample predictions
 prediction_train_tdiff <-data.frame(s_iso3c = dep_tdiff$s_iso3c,
@@ -67,11 +70,11 @@ prediction_train_tdiff <-data.frame(s_iso3c = dep_tdiff$s_iso3c,
                             diff = dep_tdiff$diff_inBMD4_outBMD4)
 
 # save predictions from cv-model
-boost_tdiff_pred <- data.frame(rowIndex= boost_tdiff_cv$pred$rowIndex[boost_tdiff_cv$pred$nrounds==200 & boost_tdiff_cv$pred$max_depth==4 & boost_tdiff_cv$pred$eta==0.3],
-                               pred= boost_tdiff_cv$pred$pred[boost_tdiff_cv$pred$nrounds==200 & boost_tdiff_cv$pred$max_depth==4 & boost_tdiff_cv$pred$eta==0.3])
+boost_tdiff_pred <- data.frame(rowIndex= boost_tdiff_cv$pred$rowIndex[boost_tdiff_cv$pred$nrounds==200 & boost_tdiff_cv$pred$max_depth==4 & boost_tdiff_cv$pred$eta==0.1],
+                               pred= boost_tdiff_cv$pred$pred[boost_tdiff_cv$pred$nrounds==200 & boost_tdiff_cv$pred$max_depth==4 & boost_tdiff_cv$pred$eta==0.1])
 
-forest_tdiff_pred <- data.frame(rowIndex= forest_tdiff_cv$pred$rowIndex[forest_tdiff_cv$pred$nrounds==1 & forest_tdiff_cv$pred$max_depth==20 & forest_tdiff_cv$pred$eta==1],
-                                pred= forest_tdiff_cv$pred$pred[forest_tdiff_cv$pred$nrounds==1 & forest_tdiff_cv$pred$max_depth==20 & forest_tdiff_cv$pred$eta==1])
+forest_tdiff_pred <- data.frame(rowIndex= forest_tdiff_cv$pred$rowIndex[forest_tdiff_cv$pred$nrounds==1 & forest_tdiff_cv$pred$max_depth==30 & forest_tdiff_cv$pred$eta==1],
+                                pred= forest_tdiff_cv$pred$pred[forest_tdiff_cv$pred$nrounds==1 & forest_tdiff_cv$pred$max_depth==30 & forest_tdiff_cv$pred$eta==1])
 
 # combine with dependent variable
 prediction_train_tdiff$boost[boost_tdiff_pred$rowIndex] <- boost_tdiff_pred$pred      
@@ -86,6 +89,7 @@ prediction_summary_tdiff <- prediction_train_tdiff %>% pivot_longer(cols = c(boo
             mae = round(mean(sqrt((diff-prediction)^2)), digits = 0),
             pseudo_rsq = round(1-(sum((diff-prediction)^2)/sum((diff)^2)), digits=3),
             N = n())
+write.csv(prediction_summary_tdiff, row.names=T)
 
 #quintile performance
 quin_perf_tdiff <- prediction_train_tdiff %>% 
@@ -98,6 +102,7 @@ quin_perf_tdiff <- prediction_train_tdiff %>%
     pRsquared = round(1-(sum((diff-boost)^2, na.rm=T)/sum((diff)^2, na.rm=T)), digits=2)
   )
 print(quin_perf_tdiff)
+write.csv(quin_perf_tdiff, row.names=T)
 
 #graphical analysis of the performance
 

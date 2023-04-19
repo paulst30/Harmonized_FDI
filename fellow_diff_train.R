@@ -33,7 +33,7 @@ boost_fdiff_cv <- train(y = dep_difffellow$diff_fellow,
                  verbose = FALSE
 )
 xgb.save(boost_fdiff_cv$finalModel, "boost_tdiff.model")
-
+importance_boost_fdiff <- varImp(boost_fdiff_cv)
 
 # k-fold crossvalidated forest
 customGrid <-  expand.grid(nrounds = 1, 
@@ -58,7 +58,7 @@ forest_fdiff_cv <- train(y = dep_difffellow$diff_fellow,
                   verbose = FALSE
 )
 xgb.save(forest_fdiff_cv$finalModel, "forest_tdiff.model")
-
+importance_forest_fdiff <- varImp(forest_fdiff_cv)
 
 prediction_train_fdiff <-data.frame(s_iso3c = dep_difffellow$s_iso3c,
                                     r_iso3c = dep_difffellow$r_iso3c,
@@ -66,11 +66,11 @@ prediction_train_fdiff <-data.frame(s_iso3c = dep_difffellow$s_iso3c,
                                        diff = dep_difffellow$diff_fellow)
 
 # save predictions from cv-model
-boost_fdiff_pred <- data.frame(rowIndex= boost_fdiff_cv$pred$rowIndex[boost_fdiff_cv$pred$nrounds==200 & boost_fdiff_cv$pred$max_depth==4 & boost_fdiff_cv$pred$eta==0.3],
-                               pred= boost_fdiff_cv$pred$pred[boost_fdiff_cv$pred$nrounds==200 & boost_fdiff_cv$pred$max_depth==4 & boost_fdiff_cv$pred$eta==0.3])
+boost_fdiff_pred <- data.frame(rowIndex= boost_fdiff_cv$pred$rowIndex[boost_fdiff_cv$pred$nrounds==1000 & boost_fdiff_cv$pred$max_depth==4 & boost_fdiff_cv$pred$eta==0.1],
+                               pred= boost_fdiff_cv$pred$pred[boost_fdiff_cv$pred$nrounds==1000 & boost_fdiff_cv$pred$max_depth==4 & boost_fdiff_cv$pred$eta==0.1])
 
 forest_fdiff_pred <- data.frame(rowIndex= forest_fdiff_cv$pred$rowIndex[forest_fdiff_cv$pred$nrounds==1 & forest_fdiff_cv$pred$max_depth==20 & forest_fdiff_cv$pred$eta==1],
-                                pred= forest_fdiff_cv$pred$pred[forest_fdiff_cv$pred$nrounds==1 & forest_fdiff_cv$pred$max_depth==20 & forest_fdiff_cv$pred$eta==1])
+                                pred= forest_fdiff_cv$pred$pred[forest_fdiff_cv$pred$nrounds==1 & forest_fdiff_cv$pred$max_depth==30 & forest_fdiff_cv$pred$eta==1])
 
 # combine with dependent variable
 prediction_train_fdiff$boost[boost_fdiff_pred$rowIndex] <- boost_fdiff_pred$pred      
@@ -85,6 +85,7 @@ prediction_summary_fdiff <- prediction_train_fdiff %>% pivot_longer(cols = c(boo
             mae = round(mean(sqrt((diff-prediction)^2)), digits = 0),
             pseudo_rsq = round(1-(sum((diff-prediction)^2)/sum((diff)^2)), digits=3),
             N = n())
+write.csv(prediction_summary_fdiff, row.names=T)
 
 #quintile performance
 quin_perf_fdiff <- prediction_train_fdiff %>% 
@@ -97,6 +98,7 @@ quin_perf_fdiff <- prediction_train_fdiff %>%
     pRsquared = round(1-(sum((diff-boost)^2, na.rm=T)/sum((diff)^2, na.rm=T)), digits=2)
   )
 print(quin_perf_fdiff)
+write.csv(quin_perf_fdiff, row.names=T)
 
 
 #graphical analysis of the performance
