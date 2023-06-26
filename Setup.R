@@ -1,101 +1,143 @@
-#Setup 
-#install.packages("tidyverse")
-#install.packages("ggplot2")
-#install.packages("haven")
-#install.packages("rpart")
-#install.packages("rpart.plot")
-#install.packages("caret")
-#install.packages("expss")
-#install.packages("randomForest")
-#install.packages("gbm")
-#install.packages("randomForestSRC")
-#install.packages("missForest")
-#install.packages("foreign")
-#install.packages("mlbench")
-#install.packages("xtable")
-#install.packages("xgboost")
-#install.packages("Matrix")
-#install.packages("cowplot")
-#install.packages("FactoMineR")
-#install.packages("car")
-#install.packages("glmnet")
-#install.packages("RANN")
-#install.packages("diversityForest")
-#install.packages("stringr")
 
 
-library(tidyverse)
-library(ggplot2)
-library(haven)
-library(foreign)
-library(rpart)
-library(rpart.plot)
-library(lattice)
-library(caret)
-library(expss)
-library(randomForest)
-library(gbm)
-library(randomForestSRC)
-library(missForest)
-library(leaps)
-library(mlbench)
-library(xtable)
-library(xgboost)
-library(Matrix)
-library(cowplot)
-library(corrplot)
-library(FactoMineR)
-library(car)
-library(glmnet)
-library(RANN)
-library(diversityForest)
-library(stringr)
 
 #read in Stata data
 data <- read_dta('quality_analysis_ml_data.dta')
 
-#impute
+
+# generate combination matrix for different algorithms
+predictor_matrix <- data.frame(dep_var= c("IN_BMD4", "IN_BMD4", "IN_BMD4", "OECD_IN_BMD3", "OECD_IN_BMD3", "OUT_BMD4"),
+                      predictor = c("OUT_BMD4", "OECD_OUT_BMD3", "OECD_IN_BMD3", "OUT_BMD4", "OECD_OUT_BMD3", "OECD_OUT_BMD3"))
+
+ 
+#define dependent var and main predictor
+target <- predictor_matrix[i,"dep_var"]                             #save dependent variable in a separate value
+predictor <- predictor_matrix[i,"predictor"]
+
+data <- data %>% mutate(inclusion= case_when(!is.na(IN_BMD4) ~ "IN_BMD4",
+                                             is.na(IN_BMD4) & !is.na(OECD_IN_BMD3) ~ "IN_BMD3",
+                                             is.na(IN_BMD4) & is.na(OECD_IN_BMD3) & !is.na(OUT_BMD4) ~ "OUT_BMD4",
+                                             is.na(IN_BMD4) & is.na(OECD_IN_BMD3) & is.na(OUT_BMD4) & !is.na(OECD_OUT_BMD3) ~ "OUT_BMD3",
+                                             .default = "")) %>%
+                 rename(dep_var=!!target,                           #flexible dependent variable for all 6 mapping procedures 
+                        predictor=!!predictor) %>%                  #flexible main predictor
+                        group_by(des_pair) %>%
+                        mutate(target_var = case_when(as.logical(max(inclusion=="IN_BMD4", na.rm = T)) ~ "IN_BMD4",
+                                                      as.logical(max(inclusion!="IN_BMD4" & inclusion=="IN_BMD3" , na.rm = T)) ~ "OECD_IN_BMD3",
+                                                      as.logical(max(inclusion!="IN_BMD4" & inclusion!="IN_BMD3" & inclusion=="OUT_BMD4" , na.rm = T)) ~ "OUT_BMD4"))
 
 
-#build additional features 
+#build additional features
+data <- data  %>% mutate(spot_share = case_when(predictor!=0 & dep_var!=0 ~ dep_var/predictor,
+                                                predictor==0 ~ 1,
+                                                .default = NA)) %>%
+                  group_by(des_pair) %>%
+                  mutate(lag1 = lag(dep_var, n=1L),
+                         lag2 = lag(dep_var, n=2L),
+                         delta = lead(dep_var, n=1L)-dep_var,
+                         delta_pred = lead(dep_var,n=1L)-lead(delta, n=1L),
+                         lead1 = lead(dep_var, n=1L),
+                         lead2 = lead(dep_var, n=2L),
+                         lag1_share = lag(spot_share, n=1L)*predictor,
+                         lag2_share = lag(spot_share, n=2L)*predictor,
+                         lead1_share = lead(spot_share, n=1L)*predictor,
+                         lead2_share = lead(spot_share, n=2L)*predictor,
+                         n_group = sum(!is.na(predictor)),
+                         n_zero = sum(predictor==0, na.rm = T),
+                         m_predictor = mean(predictor, na.rm = T),
+                         sd_predictor = sd(predictor, na.rm = T),
+                         #m_OUT_SPE = mean(OECD_OUT_SPE, na.rm = T),
+                         #m_re_IN_SPE = mean(re_OECD_IN_SPE, na.rm =T),
+                         #m_OUT_N_fellow = mean(OUT_N_fellow, na.rm = T),
+                         #m_re_in_fellow = mean(re_IMF_IN_net_fellow, na.rm = T),
+                         m_dep_var = case_when(sum(!is.na(dep_var)) > 1 & !is.na(dep_var) ~ (sum(dep_var, na.rm = T)-dep_var)/(n()-1),
+                                               sum(!is.na(dep_var)) > 1 & is.na(dep_var) ~ mean(dep_var, na.rm = T),
+                                               sum(!is.na(dep_var)) <= 1 ~ NA),
+                         n_spot_share = sum(!is.na(spot_share)),
+                         const_share_pred = case_when(sum(!is.na(spot_share)) > 1 & !is.na(spot_share) ~ (sum(spot_share, na.rm = T)-spot_share)/(n_spot_share-1)*predictor,
+                                               sum(!is.na(spot_share)) >= 1 & is.na(spot_share) ~ mean(spot_share, na.rm = T)*predictor,
+                                               sum(!is.na(spot_share)) < 1 ~ NA),
+                         sd_spot_share =sd(spot_share, na.rm=T),
+                         IIP_share = case_when(IIP_inward != 0 ~ dep_var/IIP_inward,
+                                               IIP_inward == 0 ~ 0),
+                         n_IIP_share = sum(!is.na(IIP_share)),
+                         IIP_share_pred = case_when(sum(!is.na(IIP_share)) > 1 & !is.na(IIP_share)  ~ (sum(IIP_share, na.rm = T)-IIP_share)/(n_IIP_share-1)*IIP_inward,
+                                                    sum(!is.na(IIP_share)) >= 1 & is.na(IIP_share) ~ mean(IIP_share, na.rm = T)*IIP_inward,
+                                                    sum(!is.na(IIP_share)) < 1 | is.infinite(IIP_share) ~ NA),
+                         sd_IIP_share = sd(IIP_share, na.rm=T),
+                         PI_share = case_when(A_ti_T_T != 0 ~ dep_var/A_ti_T_T,
+                                              A_ti_T_T == 0 ~ 0),
+                         n_PI_share = sum(!is.na(A_ti_T_T)),
+                         PI_share_pred = case_when(sum(!is.na(PI_share)) > 1 & !is.na(PI_share)  ~ (sum(PI_share, na.rm = T)-PI_share)/(n_PI_share-1)*A_ti_T_T,
+                                                    sum(!is.na(PI_share)) >= 1 & is.na(PI_share) ~ mean(PI_share, na.rm = T)*A_ti_T_T,
+                                                    sum(!is.na(PI_share)) < 1 | is.infinite(PI_share) ~ NA),
+                         sd_PI_share = sd(PI_share, na.rm=T)
+                         ) %>%
+                         ungroup() 
 
-#calculate weights of observations
-data <- data %>% group_by(des_pair) %>% mutate(max_OUT=max(OUT_BMD4,na.rm=T)+1,
-                                               OUT_BMD4=OUT_BMD4,
-                                               re_IN_BMD4=re_IN_BMD4,
-                                               new_diff=diff_inBMD4_outBMD4) %>% ungroup()
+# detect "outliers", i.e. pairs in which inward stocks are likely not better than outward stocks. 
+
+# outlier_ind <- data %>% group_by(des_pair) %>% mutate(sd_inward= sd(IN_BMD4, na.rm = T),
+#                                        sd_outward= sd(OUT_BMD4, na.rm = T),
+#                                        n = sum(!is.na(diff_inBMD4_outBMD4)),
+#                                        mean_diff = mean(diff_inBMD4_outBMD4/OUT_BMD4, na.rm = T),
+#                                        sd_diff = sd(diff_inBMD4_outBMD4/OUT_BMD4, na.rm = T),
+#                                        mean_diff_missings = mean(diff_inBMD4_outBMD4, na.rm = T),
+#                                        sd_diff_missings = sd(diff_inBMD4_outBMD4, na.rm = T)) %>%
+#                                        ungroup() %>%
+#                                        mutate(sd_diff = abs((diff_inBMD4_outBMD4/OUT_BMD4-mean_diff)/sd_diff),
+#                                               sd_diff = if_else(is.na(sd_diff),abs((diff_inBMD4_outBMD4-mean_diff_missings)/sd_diff_missings),0,missing = F),
+#                                               sd_diff = if_else(is.na(sd_diff) & !is.na(diff_inBMD4_outBMD4), 0, sd_diff, missing = F),
+#                                        ind = if_else(!is.na(diff_inBMD4_outBMD4) & is.na(sd_diff) & diff_inBMD4_outBMD4!=0, 1,0, missing = F)) %>%
+#                                        ungroup() %>%
+#                                        transmute(outlier = if_else((sd_inward==0 & sd_outward!=0) | sd_diff >=2, 1,0, missing = F))
+# outlier_ind <- which(outlier_ind$outlier == 1)
+# data[outlier_ind, "IN_BMD4"] <- NA
 
 
-
-data <- data %>% mutate( s_out_fellow = case_when(!is.na(OUT_N_fellow/OUT_BMD4) ~ OUT_N_fellow/OUT_BMD4 ,OUT_N_fellow==0 & OUT_BMD4==0 ~ 0),
-                         s_out_fellow2 = IMF_OUT_net_fellow/OUT_BMD4,
-                         s_re_in_fellow = re_IMF_IN_net_fellow/re_IN_BMD4,
-                         s_out_spe = OECD_OUT_SPE/OUT_BMD4,
-                         s_re_in_spe = re_OECD_IN_SPE/re_IN_BMD4,
-                         s_in_spe_IIP = SPE_IIP_inward/IIP_inward,
-                         s_out_spe_IIP =SPE_IIP_outward/IIP_outward) %>%
-                         group_by(des_pair) %>%
-                         mutate(lag1 = lag(new_diff, n=1L),
-                         lag2 = lag(new_diff, n=2L),
-                         lead1 = lead(new_diff, n=1L),
-                         lead2 = lead(new_diff, n=2L),
-                         n_group = sum(!is.na(OUT_BMD4)),
-                         n_zero = sum(OUT_BMD4==0, na.rm = T),
-                         mean_group = mean(OUT_BMD4, na.rm = T),
-                         sd_group = sd(OUT_BMD4, na.rm = T)) %>%
-                         ungroup()
-
-#additional numeric features
 
 
 #####################select variables to work with##############################
 set.seed(100)
 working_data_wm <- data %>% select(-Type, -re_IMF_IN, -re_OECD_IN_BMD4) %>%
   mutate_if(is.character, as.factor) %>%
-  filter(!is.na(OUT_BMD4))   # Outward stocks data needs to be non-missing
+  filter(!is.na(predictor))                             # main predictor variable cannot be missing
 
-modelling_data <- working_data_wm %>% filter(!is.na(OUT_BMD4) & !is.na(IN_BMD4))
-prediction_data <- working_data_wm %>% filter(!is.na(OUT_BMD4) & is.na(IN_BMD4))
+#transform numeric data
+# factor_data_wm <- working_data_wm %>% select(where(is.factor))
+# numeric_data_wm <- working_data_wm %>% select(where(is.numeric)) %>% apply(.,2,function(x) asinh(x)) %>% as.data.frame()
+# working_data_wm <- cbind(factor_data_wm, numeric_data_wm)
+
+# train-to-the-test: propensity score matching
+# prop_data <- working_data_wm %>% mutate( prediction = !is.na(OUT_BMD4) & is.na(IN_BMD4)) %>%
+#                                  group_by(des_pair) %>%
+#                                  summarize(prediction= as.factor(max(prediction, na.rm = T)),
+#                                            mOUT_BMD4 = mean(OUT_BMD4, na.rm = T ),
+#                                            s_GDPcurr = mean(s_GDPcurr, na.rm = T),
+#                                            r_GDPcurr = mean(r_GDPcurr, na.rm = T)) %>%
+#                                 ungroup() %>% 
+#                                 mutate(across(where(is.numeric), ~ as.numeric(scale(.))))
+# 
+# prop_data$r_GDPcurr[is.na(prop_data$r_GDPcurr)] <- min(prop_data$r_GDPcurr)
+# 
+# 
+# # calculate proximity and pick N nearset neighbors of each prediction observation
+# dist <- as.matrix(dist(prop_data[3:5], method = "euclidean"))
+# 
+# diag(dist) = NA
+# 
+# dist <- dist[,prop_data$prediction==1] %>%
+#         .[prop_data$prediction==0,] %>%
+#         apply(.,2,function(x) which.minn(x, n = 10)) %>%     # n nearest neighbors in the training data
+#         as.numeric() %>%
+#         unique()
+#         
+# training_pairs <- as.matrix(prop_data[dist,"des_pair"])  # list of nearest neigbors in the training data
+                                 
+modelling_data <- working_data_wm %>% filter( !is.na(dep_var)) #[working_data_wm$des_pair %in% training_pairs,]!is.na(OUT_BMD4) &
+prediction_data <- working_data_wm %>% filter(is.na(dep_var) & target_var==target)  #!is.na(OUT_BMD4) &
+
+
 
 
 # check the missingness of data
@@ -122,21 +164,29 @@ t_data <- t(t_data)
 coverage <- cbind(t_data,p_data)
 coverage_30 <- coverage[coverage[,2]>.3,]  # exclude variables that are missing more than 70 percent of the time
 
+coverage_all[i] <- coverage_30
+
 #split data into training and test sets
-training_indices <- createDataPartition(modelling_data$diff_inBMD4_outBMD4,  #dependent variable
+training_indices <- createDataPartition(modelling_data$dep_var,               #dependent variable diff_inBMD4_outBMD4
                                         groups = 10,                          #stratified over 10 quintiles
                                         p = 0.8,                              # 80 percent used for training data
                                         list = F)                             # output should be indicies not a list
-total_train_data_tdiff <- modelling_data[training_indices,] #%>% filter(new_diff < 2 & new_diff >-2)
+train_data_tdiff <- modelling_data[training_indices,]   #replace with "total_train_data_tdiff" for feature selection
 test_data_tdiff <- modelling_data[-training_indices,]
 
-#split total training data into feature selection data and training data
-feature_indices <- createDataPartition(total_train_data_tdiff$diff_inBMD4_outBMD4,
-                                       p = 1/8,
-                                       list = F)
-feature_selection_data <- total_train_data_tdiff[feature_indices,]
-train_data_tdiff <- total_train_data_tdiff[-feature_indices,]
+# #split total training data into feature selection data and training data
+# feature_indices <- createDataPartition(total_train_data_tdiff$dep_var,        #dependent var
+#                                        p = 1/8,
+#                                        list = F)
+# feature_selection_data <- total_train_data_tdiff[feature_indices,]
+# train_data_tdiff <- total_train_data_tdiff[-feature_indices,]
 
+#record training sample and prediction sample
+prediction_tasks[i,1] <- target
+prediction_tasks[i,2] <- predictor
+prediction_tasks[i,3] <- nrow(modelling_data)
+prediction_tasks[i,4] <- nrow(prediction_data)
+prediction_tasks[i,5] <- coverage["const_share_pred",2]
 
 # #Select features
 # 
@@ -176,81 +226,50 @@ train_data_tdiff <- total_train_data_tdiff[-feature_indices,]
 # 
 # # Algorithm based selection
 
-# imputation
-feature <- feature_selection_data %>% select(all_of(rownames(coverage_30)))
-knn_impute <- preProcess(as.data.frame(feature),
-                            method = c("knnImpute"),
-                            k = 20,
-                            knnSummary = mean)
-
-feature <- predict(knn_impute, newdata = feature , na.action = na.pass)
-feature_selection_data <- feature_selection_data %>% select(diff_inBMD4_outBMD4) %>%
-                                                     cbind(.,feature)
-
-
-# # fit control
-# selection_fitControl <- trainControl(method = "none",    # method for resampling 
-#                            savePredictions = F    # save prediction during fitting process
-#                            )
-# #glmnet
-# selection_glmnet <- train(diff_inBMD4_outBMD4 ~ .,
-#                           data = (feature_selection_data %>% select(all_of(rownames(coverage_30)), diff_inBMD4_outBMD4)),
-#                           method = "glmnet", 
-#                           tune_grid = expand.grid(alpha = 1),
-#                           trControl = selection_fitControl,
-#                           preProcess = c("knnImpute"),
-#                           na.action = na.pass
-#                           )
-# var_sel_glmnet <- varImp(selection_glmnet)$importance %>% arrange(desc(Overall)) %>% head(4) %>% rownames()
+# # imputation
+# feature <- feature_selection_data %>% select(all_of(rownames(coverage_30)))
+# knn_impute <- preProcess(as.data.frame(feature),
+#                             method = c("knnImpute"),
+#                             k = 5,
+#                             knnSummary = mean)
 # 
-# selection2_glmnet <- train(diff_inBMD4_outBMD4 ~ .,
-#                           data = feature_selection_data %>% select(starts_with("r_IMF"), 
-#                                                                    starts_with("s_IMF"),
-#                                                                    diff_inBMD4_outBMD4),
-#                           method = "glmnet", 
-#                           trControl = selection_fitControl,
-#                           preProcess = c("knnImpute"),
-#                           na.action = na.pass)
-# varImp(selection2_glmnet)$importance %>% arrange(desc(Overall))
+# feature <- predict(knn_impute, newdata = feature , na.action = na.pass)
+# feature_selection_data <- feature_selection_data %>% select(dep_var) %>%         # dep_var
+#                                                      cbind(.,feature)
+# 
+# 
+# #interactionForest for detecting interaction effects
+# 
+# selection_intforest <- interactionfor(dep_var ~.,                    # dependent var
+#                                       data = feature_selection_data, 
+#                                       importance = "both",
+#                                       simplify.large.n = TRUE)  #adjusts tree depth and number of trees accroding to number of variables
+# str_replace <- c(" AND "= "*", " small" = "", " large"="")
+# quant_interactions <- as.data.frame(selection_intforest$eim.quant.sorted) %>% head(5) %>% 
+#                                     rownames() %>% str_replace_all(.,str_replace) %>% gsub("[ ].*","" ,.)
+# qual_interactions <- as.data.frame(selection_intforest$eim.qual.sorted) %>% head(5) %>% 
+#                                    rownames() %>% str_replace_all(.,str_replace) %>% gsub("[ ].*","" ,.)
+# uni_var <- as.data.frame(selection_intforest$eim.univ.sorted) %>% head(10) %>% 
+#                                    rownames() %>% str_replace_all(.,str_replace) %>% gsub("[ ].*","" ,.)
+# form <- c(uni_var, quant_interactions, qual_interactions) %>% unique() %>% 
+#                                            paste(., collapse = " + ") %>% 
+#                                            c("dep_var ~ ", ., "-1") %>%          #dependent var
+#                                            paste(., collapse= "") %>%
+#                                            as.formula()
 
-
-#interactionForest for detecting interaction effects
-
-selection_intforest <- interactionfor(diff_inBMD4_outBMD4 ~., 
-                                      data = (feature_selection_data %>% select(all_of(rownames(coverage_30)), diff_inBMD4_outBMD4)), 
-                                      importance = "both",
-                                      simplify.large.n = TRUE)  #adjusts tree depth and number of trees accroding to number of variables
-str_replace <- c(" AND "= "*", " small" = "", " large"="")
-quant_interactions <- as.data.frame(selection_intforest$eim.quant.sorted) %>% head(5) %>% 
-                                    rownames() %>% str_replace_all(.,str_replace) %>% gsub("[ ].*","" ,.)
-qual_interactions <- as.data.frame(selection_intforest$eim.qual.sorted) %>% head(5) %>% 
-                                   rownames() %>% str_replace_all(.,str_replace) %>% gsub("[ ].*","" ,.)
-uni_var <- as.data.frame(selection_intforest$eim.univ.sorted) %>% head(10) %>% 
-                                   rownames() %>% str_replace_all(.,str_replace) %>% gsub("[ ].*","" ,.)
-form <- c(uni_var, quant_interactions, qual_interactions) %>% unique() %>% 
-                                           paste(., collapse = " + ") %>% 
-                                           c("diff_inBMD4_outBMD4 ~ ", ., "-1") %>% 
-                                           paste(., collapse= "") %>%
-                                           as.formula()
+form <- as.formula(dep_var ~ predictor + m_dep_var + const_share_pred + const_share_pred:predictor + sd_spot_share + 
+                     IIP_share_pred + sd_IIP_share + m_predictor + sd_predictor + n_group + delta_pred + PI_share_pred + sd_PI_share +
+                     year + r_conduit + s_conduit + r_sink + s_conduit -1)
 
 
 ###############Training data################
 
 #########training sample for total difference#############
 #exclude variables that should not be used for prediction
-dep_tdiff <- train_data_tdiff %>% select(diff_inBMD4_outBMD4, new_diff, s_iso3c, r_iso3c, year, IN_BMD4, OUT_BMD4)
+dep_tdiff <- train_data_tdiff %>% select(dep_var, predictor, s_iso3c, r_iso3c, des_pair, year)
 
 train_data_tdiff <- model.matrix.lm(form, data = train_data_tdiff, na.action="na.pass") %>% as.matrix()
 
-
-#one-hot endcoding
-#xgb_train_num <- train_data_tdiff %>% select(where(is.numeric))
-#xgb_train_fac <- train_data_tdiff %>% select(where(is.factor))
-#xgb_dummy <- dummyVars(" ~ .", data = xgb_train_fac)
-#xgb_single_answers <- as.data.frame(predict(xgb_dummy, newdata = xgb_train_fac))
-
-#combine to xgb Matrix
-#xgb_train_tdiff <- cbind(xgb_train_num, xgb_single_answers) %>% as.matrix()
 xgb_train_tdiff_sp <- as(train_data_tdiff, "dgCMatrix")
 
 #######training sample for difference in fellows###########
@@ -272,17 +291,15 @@ xgb_train_tdiff_sp <- as(train_data_tdiff, "dgCMatrix")
 #xgb_train_difffellow_sp <- as(xgb_train_difffellow, "dgCMatrix")
 
 ################# test sample ################################
-dep_test_tdiff <- test_data_tdiff %>% select(diff_inBMD4_outBMD4, new_diff, s_iso3c, r_iso3c, year, IN_BMD4, OUT_BMD4)
+dep_test_tdiff <- test_data_tdiff %>% select(dep_var, predictor, s_iso3c, r_iso3c, year)
 
 test_data_tdiff <- model.matrix.lm(form, data = test_data_tdiff, na.action="na.pass") %>% as.matrix()
 
-
-# #one-hot endcoding
-# xgb_test_num <- test_data_tdiff %>% select(where(is.numeric))
-# xgb_test_fac <- test_data_tdiff %>% select(where(is.factor))
-# xgb_dummy <- dummyVars(" ~ .", data = xgb_test_fac)
-# xgb_single_answers <- as.data.frame(predict(xgb_dummy, newdata = xgb_test_fac))
-# 
-# #combine to xgb Matrix
-# xgb_test_tdiff <- cbind(xgb_test_num, xgb_single_answers) %>% as.matrix()
 xgb_test_tdiff_sp <- as(test_data_tdiff, "dgCMatrix")
+
+################ prediction data ############################
+dep_pred_tdiff <- prediction_data %>% select(dep_var, predictor, s_iso3c, r_iso3c, des_pair, year)
+
+prediction_data <- model.matrix.lm(form, data = prediction_data, na.action="na.pass") %>% as.matrix()
+
+xgb_pred_tdiff_sp <- as(prediction_data, "dgCMatrix")
