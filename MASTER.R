@@ -25,6 +25,7 @@
 #install.packages("MatchIt")
 #install.packages("doBy")
 #install.packages("neuralnet")
+#install.packages("fixest")
 
 
 
@@ -57,6 +58,8 @@ library(stringr)
 library(MatchIt)
 library(doBy)
 library(neuralnet)
+library(fixest)
+
 
 quin_perfs <- list()
 varimps <- list()
@@ -82,4 +85,5 @@ rm(list=setdiff(ls(), c("quin_perfs",
 }
 
 source("results.R")
+source("practical_test.R")
 source("fellow_diff_train.R")

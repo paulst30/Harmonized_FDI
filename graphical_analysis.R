@@ -198,10 +198,11 @@ ultimate_data_sources<-ultimate_data_sources %>% group_by(des_pair) %>% mutate(i
                                                 mutate(series = as.factor(paste(inbmd4, outbmd4, inbmd3, outbmd3))) %>%
                                                 ungroup() %>% group_by(series) %>%
                                                 summarize(pairs = n_distinct(des_pair),
+                                                          obs = n(),
                                                           no_IN_BMD4 = sum(final_series=="Inward BMD4"),
                                                           no_OUT_BMD4 = sum(final_series=="Outward BMD4"),
                                                           no_IN_BMD3 = sum(final_series=="Inward BMD3"),
-                                                          no_OUT_BMD3 = sum(final_series=="Outward BMD3"))
+                                                          no_OUT_BMD3 = sum(final_series=="Outward BMD3")) # how many obs end up being taken from the respective series
 
 ultimate_data_sources$series <- str_trim(ultimate_data_sources$series)
 ultimate_data_sources <- ultimate_data_sources[order(nchar(ultimate_data_sources$series)),]
