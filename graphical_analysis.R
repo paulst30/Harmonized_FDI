@@ -175,16 +175,16 @@ heatmap(count2,Rowv = NA,Colv = NA, labRow = "",labCol = "", xlab="receiver", yl
 ultimate_data_sources <- data %>% select(s_iso3c, r_iso3c, year,des_pair , OUT_BMD4, IN_BMD4, OECD_IN_BMD3, OECD_OUT_BMD3) %>%
                                  filter(!is.na(OUT_BMD4) | !is.na(IN_BMD4) | !is.na(OECD_IN_BMD3) | !is.na(OECD_OUT_BMD3))
 
-ultimate_data_sources$final_series[!is.na(ultimate_data_sources$IN_BMD4)] <- "Inward BMD4"
-ultimate_data_sources$final_series[is.na(ultimate_data_sources$IN_BMD4) & 
-                                  !is.na(ultimate_data_sources$OECD_IN_BMD3)] <- "Inward BMD3"
+ultimate_data_sources$final_series[!is.na(ultimate_data_sources$OECD_IN_BMD3)] <- "Inward BMD3"
+ultimate_data_sources$final_series[is.na(ultimate_data_sources$OECD_IN_BMD3) & 
+                                  !is.na(ultimate_data_sources$OECD_OUT_BMD3)] <- "Outward BMD3"
+ultimate_data_sources$final_series[is.na(ultimate_data_sources$OECD_IN_BMD3) & 
+                                     is.na(ultimate_data_sources$OECD_OUT_BMD3) &
+                                     !is.na(ultimate_data_sources$IN_BMD4)] <- "Inward BMD4"
 ultimate_data_sources$final_series[is.na(ultimate_data_sources$IN_BMD4) & 
                                      is.na(ultimate_data_sources$OECD_IN_BMD3) &
+                                     is.na(ultimate_data_sources$OECD_OUT_BMD3) &
                                      !is.na(ultimate_data_sources$OUT_BMD4)] <- "Outward BMD4"
-ultimate_data_sources$final_series[is.na(ultimate_data_sources$IN_BMD4) & 
-                                     is.na(ultimate_data_sources$OECD_IN_BMD3) &
-                                     is.na(ultimate_data_sources$OUT_BMD4) &
-                                     !is.na(ultimate_data_sources$OECD_OUT_BMD3)] <- "Outward BMD3"
 ultimate_data_sources$final_series <- as.factor(ultimate_data_sources$final_series)
 
 ultimate_data_sources<-ultimate_data_sources %>% group_by(des_pair) %>% mutate(inbmd4 = if_else(final_series=="Inward BMD4","Inward BMD4", ''),
@@ -215,20 +215,21 @@ overview_series <- ultimate_data_sources %>% mutate(sum = sum(no_IN_BMD4, no_OUT
                                                        share = round(observations/sum, digits=2))
 write.csv(overview_series, row.names = F) #output for the paper
 
-overview_prediction_INB4 <- ultimate_data_sources[ultimate_data_sources$no_IN_BMD4!=0,] %>% 
-                              summarize(prOUT_BMD4 = sum(no_OUT_BMD4),
-                                        prOECD_IN_BMD3 = sum(no_IN_BMD3),
+overview_prediction_INB3 <- ultimate_data_sources[ultimate_data_sources$no_IN_BMD3!=0,] %>% 
+                              summarize(prIN_BMD4 = sum(no_IN_BMD4),
+                                        prOUT_BMD4 = sum(no_OUT_BMD4),
                                         prOECD_OUT_BMD3 = sum(no_OUT_BMD3))
-overview_prediction_INB3 <- ultimate_data_sources[ultimate_data_sources$no_IN_BMD4==0 & ultimate_data_sources$no_IN_BMD3!=0,] %>% 
-                             summarize(prOUT_BMD4 = sum(no_OUT_BMD4),
-                                       prOECD_IN_BMD3 = 0,
-                                       prOECD_OUT_BMD3 = sum(no_OUT_BMD3))
-overview_prediction_OUB4 <- ultimate_data_sources[ultimate_data_sources$no_IN_BMD4==0 & ultimate_data_sources$no_IN_BMD3==0 & ultimate_data_sources$no_OUT_BMD4!=0,] %>% 
-                             summarize(prOUT_BMD4 = 0,
-                                       prOECD_IN_BMD3 = 0,
-                                       prOECD_OUT_BMD3 = sum(no_OUT_BMD3))
-overview_prediction <- rbind(overview_prediction_INB4, overview_prediction_INB3, overview_prediction_OUB4)
-overview_prediction$dep <- c("IN_BMD4", "OECD_IN_BMD3", "OUT_BMD4")
+overview_prediction_OUB3 <- ultimate_data_sources[ultimate_data_sources$no_IN_BMD3==0 & ultimate_data_sources$no_OUT_BMD3!=0,] %>% 
+                             summarize(prIN_BMD4 = sum(no_IN_BMD4),
+                                       prOUT_BMD4 = sum(no_OUT_BMD4),
+                                       prOECD_OUT_BMD3 = 0)
+overview_prediction_INB4 <- ultimate_data_sources[ultimate_data_sources$no_IN_BMD4!=0 & ultimate_data_sources$no_IN_BMD3==0 & ultimate_data_sources$no_OUT_BMD3==0,] %>% 
+                             summarize(prIN_BMD4 = 0,
+                                       prOUT_BMD4 = sum(no_OUT_BMD4),
+                                       prOECD_OUT_BMD3 = 0)
+
+overview_prediction <- rbind(overview_prediction_INB3, overview_prediction_OUB3, overview_prediction_INB4)
+overview_prediction$dep <- c("OECD_IN_BMD3", "OECD_OUT_BMD3", "IN_BMD4")
 
 #prediction sample
 overview_prediction <- pivot_longer(overview_prediction,cols=starts_with("pr"),
