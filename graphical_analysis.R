@@ -170,33 +170,104 @@ heatmap(count2,Rowv = NA,Colv = NA, labRow = "",labCol = "", xlab="receiver", yl
         main="Outward Stocks" ,margins = c(2,2))
 
 ############### heatmap for ultimate sample ###################################
+#data <- read_dta('quality_analysis_ml_data.dta')
 
 ultimate_data_sources <- data %>% select(s_iso3c, r_iso3c, year,des_pair , OUT_BMD4, IN_BMD4, OECD_IN_BMD3, OECD_OUT_BMD3) %>%
                                  filter(!is.na(OUT_BMD4) | !is.na(IN_BMD4) | !is.na(OECD_IN_BMD3) | !is.na(OECD_OUT_BMD3))
 
-ultimate_data_sources$final_series[!is.na(ultimate_data_sources$IN_BMD4)] <- "Inward BMD4"
-ultimate_data_sources$final_series[is.na(ultimate_data_sources$IN_BMD4) & 
-                                  !is.na(ultimate_data_sources$OECD_IN_BMD3)] <- "Inward BMD3"
+ultimate_data_sources$final_series[!is.na(ultimate_data_sources$OECD_IN_BMD3)] <- "Inward BMD3"
+ultimate_data_sources$final_series[is.na(ultimate_data_sources$OECD_IN_BMD3) & 
+                                  !is.na(ultimate_data_sources$OECD_OUT_BMD3)] <- "Outward BMD3"
+ultimate_data_sources$final_series[is.na(ultimate_data_sources$OECD_IN_BMD3) & 
+                                     is.na(ultimate_data_sources$OECD_OUT_BMD3) &
+                                     !is.na(ultimate_data_sources$IN_BMD4)] <- "Inward BMD4"
 ultimate_data_sources$final_series[is.na(ultimate_data_sources$IN_BMD4) & 
                                      is.na(ultimate_data_sources$OECD_IN_BMD3) &
+                                     is.na(ultimate_data_sources$OECD_OUT_BMD3) &
                                      !is.na(ultimate_data_sources$OUT_BMD4)] <- "Outward BMD4"
-ultimate_data_sources$final_series[is.na(ultimate_data_sources$IN_BMD4) & 
-                                     is.na(ultimate_data_sources$OECD_IN_BMD3) &
-                                     is.na(ultimate_data_sources$OUT_BMD4) &
-                                     !is.na(ultimate_data_sources$OECD_OUT_BMD3)] <- "Outward BMD3"
+ultimate_data_sources$final_series <- as.factor(ultimate_data_sources$final_series)
+
+ultimate_data_sources<-ultimate_data_sources %>% group_by(des_pair) %>% mutate(inbmd4 = if_else(final_series=="Inward BMD4","Inward BMD4", ''),
+                                                        outbmd4 = if_else(final_series=="Outward BMD4","Outward BMD4", ''),
+                                                        inbmd3 = if_else(final_series=="Inward BMD3","Inward BMD3", ''),
+                                                        outbmd3 = if_else(final_series=="Outward BMD3", "Outward BMD3", '')) %>%
+                                                 mutate(inbmd4=max(inbmd4),
+                                                           outbmd4=max(outbmd4),
+                                                           inbmd3=max(inbmd3),
+                                                           outbmd3=max(outbmd3)) %>%
+                                                mutate(series = as.factor(paste(inbmd4, outbmd4, inbmd3, outbmd3))) %>%
+                                                ungroup() %>% group_by(series) %>%
+                                                summarize(pairs = n_distinct(des_pair),
+                                                          obs = n(),
+                                                          no_IN_BMD4 = sum(final_series=="Inward BMD4"),
+                                                          no_OUT_BMD4 = sum(final_series=="Outward BMD4"),
+                                                          no_IN_BMD3 = sum(final_series=="Inward BMD3"),
+                                                          no_OUT_BMD3 = sum(final_series=="Outward BMD3")) # how many obs end up being taken from the respective series
+
+ultimate_data_sources$series <- str_trim(ultimate_data_sources$series)
+ultimate_data_sources <- ultimate_data_sources[order(nchar(ultimate_data_sources$series)),]
+
+overview_series <- ultimate_data_sources %>% mutate(sum = sum(no_IN_BMD4, no_OUT_BMD4, no_IN_BMD3, no_OUT_BMD3)) %>%
+                                             group_by(series) %>%
+                                             transmute(series = series,
+                                                       pairs = pairs,
+                                                       observations = sum(no_IN_BMD4, no_OUT_BMD4, no_IN_BMD3, no_OUT_BMD3),
+                                                       share = round(observations/sum, digits=2))
+write.csv(overview_series, row.names = F) #output for the paper
+
+overview_prediction_INB3 <- ultimate_data_sources[ultimate_data_sources$no_IN_BMD3!=0,] %>% 
+                              summarize(prIN_BMD4 = sum(no_IN_BMD4),
+                                        prOUT_BMD4 = sum(no_OUT_BMD4),
+                                        prOECD_OUT_BMD3 = sum(no_OUT_BMD3))
+overview_prediction_OUB3 <- ultimate_data_sources[ultimate_data_sources$no_IN_BMD3==0 & ultimate_data_sources$no_OUT_BMD3!=0,] %>% 
+                             summarize(prIN_BMD4 = sum(no_IN_BMD4),
+                                       prOUT_BMD4 = sum(no_OUT_BMD4),
+                                       prOECD_OUT_BMD3 = 0)
+overview_prediction_INB4 <- ultimate_data_sources[ultimate_data_sources$no_IN_BMD4!=0 & ultimate_data_sources$no_IN_BMD3==0 & ultimate_data_sources$no_OUT_BMD3==0,] %>% 
+                             summarize(prIN_BMD4 = 0,
+                                       prOUT_BMD4 = sum(no_OUT_BMD4),
+                                       prOECD_OUT_BMD3 = 0)
+
+overview_prediction <- rbind(overview_prediction_INB3, overview_prediction_OUB3, overview_prediction_INB4)
+overview_prediction$dep <- c("OECD_IN_BMD3", "OECD_OUT_BMD3", "IN_BMD4")
+
+#prediction sample
+overview_prediction <- pivot_longer(overview_prediction,cols=starts_with("pr"),
+                                    names_prefix = "pr",
+                                    names_to = "predictor", values_to = "prediction_sample" ) %>%
+                                    filter(prediction_sample>0)
+#training sample
+overview_training <- matrix(nrow=6,ncol=1) %>% as.data.frame() 
+for (i in 1:6) {
+  overview_training[i,] <- sum(!is.na(data[,overview_prediction$dep[i]]) & !is.na(data[, overview_prediction$predictor[i]]))
+}
+colnames(overview_training) <- "training_sample" 
+overview_prediction <- cbind(overview_prediction,overview_training)
+overview_prediction <- overview_prediction[,c("dep", "predictor", "training_sample", "prediction_sample")]
+
+
 
 ultimate_data_sources <- ultimate_data_sources %>% select(des_pair, year, final_series) %>%
                                  pivot_wider(names_from = year, values_from = final_series )
-col_order <- c( "2009", "2010", "2011",
+col_order <- c( "des_pair", "2009", "2010", "2011",
                "2012", "2013", "2014", "2015" ,"2016", "2017", "2018", "2019")
-ultimate_data_sources <- ultimate_data_sources[, col_order]
+ultimate_data_sources <- ultimate_data_sources[,  col_order]
 time_series <- as.matrix(ultimate_data_sources)
 
 ggplot(data = ultimate_data_sources, aes(y=des_pair, x=year,color=final_series)) + geom_point()
 
+##################infinity or overly large#####################################
+graph_inf_data <- working_data_wm %>%
+  select(IN_BMD4, OUT_BMD4, max_OUT_BMD4, diff_inBMD4_outBMD4) %>%
+  mutate( ratio= IN_BMD4/OUT_BMD4,
+    difficult =case_when(inrange(diff_inBMD4_outBMD4,-2,2) ~"easy",
+                              diff_inBMD4_outBMD4>2 ~"difficult",
+                              diff_inBMD4_outBMD4<(-2) ~"difficult"))
+         
+ggplot(data = graph_inf_data[graph_inf_data$ratio>5 | graph_inf_data$ratio<(.2),]) + geom_point(aes(x=OUT_BMD4*max_OUT_BMD4, y=IN_BMD4*max_OUT_BMD4 )) + 
+  coord_cartesian(xlim=c(-25000,300000), ylim =c(-25000,300000) )
 
-
-
+ggplot(data = working_data_wm) + geom_point(aes(x=OUT_BMD4, y=IN_BMD4 )) +  coord_cartesian(xlim=c(-2,2), ylim =c(-10,10) )
 
 
 
