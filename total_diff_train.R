@@ -229,13 +229,15 @@ if (i == 1) {
                                     r_iso3c = dep_pred_tdiff$r_iso3c,
                                     year = dep_pred_tdiff$year,
                                     boost = predict(boost_tdiff_cv, newdata =  xgb_pred_tdiff_sp),
-                                    target = paste(target))
+                                    target = paste(target),
+                                predictor=paste(predictor))
 } else {
   merge <- data.frame(s_iso3c = dep_pred_tdiff$s_iso3c,
                       r_iso3c = dep_pred_tdiff$r_iso3c,
                       year = dep_pred_tdiff$year,
                       boost = predict(boost_tdiff_cv, newdata =  xgb_pred_tdiff_sp),
-                      target = paste(target))
+                      target = paste(target),
+                      predictor = paste(predictor))
   prediction_tdiff <- rbind(prediction_tdiff, merge)
 }
 

@@ -31,10 +31,14 @@ data <- data %>% mutate(inclusion= case_when(!is.na(OECD_IN_BMD3) ~ "IN_BMD3",
                                                                  max(inclusion=="OUT_BMD4" , na.rm = T)) ~ "OUT_BMD4"))
 
 
-#build additional features
+#build additional features that are the same for test and training sample
 data <- data  %>% mutate(spot_share = case_when(predictor!=0 & dep_var!=0 ~ dep_var/predictor,
                                                 predictor==0 ~ 1,
-                                                .default = NA)) %>%
+                                                .default = NA),
+                         IIP_share = case_when(IIP_inward != 0 ~ dep_var/IIP_inward,
+                                               IIP_inward == 0 ~ 0),
+                         PI_share = case_when(A_ti_T_T != 0 ~ dep_var/A_ti_T_T,
+                                              A_ti_T_T == 0 ~ 0)) %>%
                   group_by(des_pair) %>%
                   mutate(lag1 = lag(dep_var, n=1L),
                          lag2 = lag(dep_var, n=2L),
@@ -46,38 +50,14 @@ data <- data  %>% mutate(spot_share = case_when(predictor!=0 & dep_var!=0 ~ dep_
                          lag2_share = lag(spot_share, n=2L)*predictor,
                          lead1_share = lead(spot_share, n=1L)*predictor,
                          lead2_share = lead(spot_share, n=2L)*predictor,
+                         lead3_share = lead(spot_share, n=3L)*predictor,
+                         lead4_share = lead(spot_share, n=4L)*predictor,
                          n_group = sum(!is.na(predictor)),
                          n_zero = sum(predictor==0, na.rm = T),
                          m_predictor = mean(predictor, na.rm = T),
-                         sd_predictor = sd(predictor, na.rm = T),
-                         #m_OUT_SPE = mean(OECD_OUT_SPE, na.rm = T),
-                         #m_re_IN_SPE = mean(re_OECD_IN_SPE, na.rm =T),
-                         #m_OUT_N_fellow = mean(OUT_N_fellow, na.rm = T),
-                         #m_re_in_fellow = mean(re_IMF_IN_net_fellow, na.rm = T),
-                         m_dep_var = case_when(sum(!is.na(dep_var)) > 1 & !is.na(dep_var) ~ (sum(dep_var, na.rm = T)-dep_var)/(n()-1),
-                                               sum(!is.na(dep_var)) > 1 & is.na(dep_var) ~ mean(dep_var, na.rm = T),
-                                               sum(!is.na(dep_var)) <= 1 ~ NA),
-                         n_spot_share = sum(!is.na(spot_share)),
-                         const_share_pred = case_when(sum(!is.na(spot_share)) > 1 & !is.na(spot_share) ~ (sum(spot_share, na.rm = T)-spot_share)/(n_spot_share-1)*predictor,
-                                               sum(!is.na(spot_share)) >= 1 & is.na(spot_share) ~ mean(spot_share, na.rm = T)*predictor,
-                                               sum(!is.na(spot_share)) < 1 ~ NA),
-                         sd_spot_share =sd(spot_share, na.rm=T),
-                         IIP_share = case_when(IIP_inward != 0 ~ dep_var/IIP_inward,
-                                               IIP_inward == 0 ~ 0),
-                         n_IIP_share = sum(!is.na(IIP_share)),
-                         IIP_share_pred = case_when(sum(!is.na(IIP_share)) > 1 & !is.na(IIP_share)  ~ (sum(IIP_share, na.rm = T)-IIP_share)/(n_IIP_share-1)*IIP_inward,
-                                                    sum(!is.na(IIP_share)) >= 1 & is.na(IIP_share) ~ mean(IIP_share, na.rm = T)*IIP_inward,
-                                                    sum(!is.na(IIP_share)) < 1 | is.infinite(IIP_share) ~ NA),
-                         sd_IIP_share = sd(IIP_share, na.rm=T),
-                         PI_share = case_when(A_ti_T_T != 0 ~ dep_var/A_ti_T_T,
-                                              A_ti_T_T == 0 ~ 0),
-                         n_PI_share = sum(!is.na(A_ti_T_T)),
-                         PI_share_pred = case_when(sum(!is.na(PI_share)) > 1 & !is.na(PI_share)  ~ (sum(PI_share, na.rm = T)-PI_share)/(n_PI_share-1)*A_ti_T_T,
-                                                    sum(!is.na(PI_share)) >= 1 & is.na(PI_share) ~ mean(PI_share, na.rm = T)*A_ti_T_T,
-                                                    sum(!is.na(PI_share)) < 1 | is.infinite(PI_share) ~ NA),
-                         sd_PI_share = sd(PI_share, na.rm=T)
-                         ) %>%
+                         sd_predictor = sd(predictor, na.rm = T)) %>%
                          ungroup() 
+
 
 # detect "outliers", i.e. pairs in which inward stocks are likely not better than outward stocks. 
 
@@ -139,44 +119,89 @@ working_data_wm <- data %>% select(-Type, -re_IMF_IN, -re_OECD_IN_BMD4) %>%
 # training_pairs <- as.matrix(prop_data[dist,"des_pair"])  # list of nearest neigbors in the training data
                                  
 modelling_data <- working_data_wm %>% filter( !is.na(dep_var)) #[working_data_wm$des_pair %in% training_pairs,]!is.na(OUT_BMD4) &
-prediction_data <- working_data_wm %>% filter(is.na(dep_var) & target_var==target)  #!is.na(OUT_BMD4) &
+
+prediction_indep_vars <- modelling_data %>% group_by(des_pair) %>%
+                         summarize(m_dep_var = mean(dep_var, na.rm=T),
+                                  sd_dep_var =sd(dep_var, na.rm=T),
+                                  const_share_pred = mean(spot_share),
+                                  sd_spot_share =sd(spot_share, na.rm=T),
+                                  IIP_share_pred = mean(IIP_share, na.rm=T),
+                                  sd_IIP_share = sd(IIP_share, na.rm=T),
+                                  PI_share_pred = mean(PI_share, na.rm=T),
+                                  sd_PI_share = sd(PI_share, na.rm=T))
+prediction_data <- working_data_wm %>% filter(is.na(dep_var) & target_var==target) %>%
+                   merge(.,prediction_indep_vars, by=c("des_pair"),all.x=T) 
 
 
 
 
-# check the missingness of data
-p_data <- prediction_data %>%
-  select( -starts_with("IMF"), -IIA, -PTA, -DTT, -BIT, -exchange_rate, -ind_exchange_rate,
-          -fin_center, -s_id, -r_id, -group_id, -s_answers, -r_answers, -s_iso3c, -r_iso3c, -des_pair, -re_des_pair,
-          -ends_with("14"), -ends_with("17"), -ends_with("18"), -ends_with("19"), -ends_with("20"),
-          -OECD_OUT_BMD4, IMF_OUT_net_fellow ) %>%
-  summarise(across(everything(),~ mean(!is.na(.x))))
-rownames(p_data) <- c("Prediction")
-p_data <- t(p_data)
-
-#training data
-t_data <- modelling_data %>%
-  select( -starts_with("IMF"), -IIA, -PTA, -DTT, -BIT, -exchange_rate, -ind_exchange_rate,
-          -fin_center, -s_id, -r_id, -group_id, -s_answers, -r_answers, -s_iso3c, -r_iso3c, -des_pair,-re_des_pair,
-          -ends_with("14"), -ends_with("17"), -ends_with("18"), -ends_with("19"), -ends_with("20"),
-          -OECD_OUT_BMD4, IMF_OUT_net_fellow )  %>%
-  summarise(across(everything(),~ mean(!is.na(.x))))
-rownames(t_data) <- c("Training")
-t_data <- t(t_data)
-
-#combining both
-coverage <- cbind(t_data,p_data)
-coverage_30 <- coverage[coverage[,2]>.3,]  # exclude variables that are missing more than 70 percent of the time
-
-coverage_all[i] <- coverage_30
+# # check the missingness of data
+# p_data <- prediction_data %>%
+#   select( -starts_with("IMF"), -IIA, -PTA, -DTT, -BIT, -exchange_rate, -ind_exchange_rate,
+#           -fin_center, -s_id, -r_id, -group_id, -s_answers, -r_answers, -s_iso3c, -r_iso3c, -des_pair, -re_des_pair,
+#           -ends_with("14"), -ends_with("17"), -ends_with("18"), -ends_with("19"), -ends_with("20"),
+#           -OECD_OUT_BMD4, IMF_OUT_net_fellow ) %>%
+#   summarise(across(everything(),~ mean(!is.na(.x))))
+# rownames(p_data) <- c("Prediction")
+# p_data <- t(p_data)
+# 
+# #training data
+# t_data <- modelling_data %>%
+#   select( -starts_with("IMF"), -IIA, -PTA, -DTT, -BIT, -exchange_rate, -ind_exchange_rate,
+#           -fin_center, -s_id, -r_id, -group_id, -s_answers, -r_answers, -s_iso3c, -r_iso3c, -des_pair,-re_des_pair,
+#           -ends_with("14"), -ends_with("17"), -ends_with("18"), -ends_with("19"), -ends_with("20"),
+#           -OECD_OUT_BMD4, IMF_OUT_net_fellow )  %>%
+#   summarise(across(everything(),~ mean(!is.na(.x))))
+# rownames(t_data) <- c("Training")
+# t_data <- t(t_data)
+# 
+# #combining both
+# coverage <- cbind(t_data,p_data)
+# coverage_30 <- coverage[coverage[,2]>.3,]  # exclude variables that are missing more than 70 percent of the time
+# 
+# coverage_all[i] <- coverage_30
 
 #split data into training and test sets
 training_indices <- createDataPartition(modelling_data$dep_var,               #dependent variable diff_inBMD4_outBMD4
                                         groups = 10,                          #stratified over 10 quintiles
                                         p = 0.8,                              # 80 percent used for training data
                                         list = F)                             # output should be indicies not a list
-train_data_tdiff <- modelling_data[training_indices,]   #replace with "total_train_data_tdiff" for feature selection
-test_data_tdiff <- modelling_data[-training_indices,]
+train_data_tdiff <- modelling_data[training_indices,]  %>% #replace with "total_train_data_tdiff" for feature selection
+                    group_by(des_pair) %>% 
+                    mutate(m_dep_var = case_when(sum(!is.na(dep_var)) > 1 & !is.na(dep_var) ~ (sum(dep_var, na.rm = T)-dep_var)/(n()-1),
+                                                 sum(!is.na(dep_var)) > 1 & is.na(dep_var) ~ mean(dep_var, na.rm = T),
+                                                 sum(!is.na(dep_var)) <= 1 ~ NA),
+                          sd_dep_var = sd(dep_var, na.rm=T),
+                          n_spot_share = sum(!is.na(spot_share)),
+                          const_share_pred = case_when(sum(!is.na(spot_share)) > 1 & !is.na(spot_share) ~ (sum(spot_share, na.rm = T)-spot_share)/(n_spot_share-1),
+                                                       sum(!is.na(spot_share)) >= 1 & is.na(spot_share) ~ mean(spot_share, na.rm = T),
+                                                       sum(!is.na(spot_share)) < 1 ~ NA),
+                         sd_spot_share =sd(spot_share, na.rm=T),
+                         n_IIP_share = sum(!is.na(IIP_share)),
+                         IIP_share_pred = case_when(sum(!is.na(IIP_share)) > 1 & !is.na(IIP_share)  ~ (sum(IIP_share, na.rm = T)-IIP_share)/(n_IIP_share-1),
+                                                    sum(!is.na(IIP_share)) >= 1 & is.na(IIP_share) ~ mean(IIP_share, na.rm = T),
+                                                    sum(!is.na(IIP_share)) < 1 | is.infinite(IIP_share) ~ NA),
+                         sd_IIP_share = sd(IIP_share, na.rm=T),
+                         n_PI_share = sum(!is.na(A_ti_T_T)),
+                         PI_share_pred = case_when(sum(!is.na(PI_share)) > 1 & !is.na(PI_share)  ~ (sum(PI_share, na.rm = T)-PI_share)/(n_PI_share-1),
+                                                       sum(!is.na(PI_share)) >= 1 & is.na(PI_share) ~ mean(PI_share, na.rm = T),
+                                                       sum(!is.na(PI_share)) < 1 | is.infinite(PI_share) ~ NA),
+                         sd_PI_share = sd(PI_share, na.rm=T)
+                         ) %>%
+                         ungroup() 
+
+test_indep_vars <- train_data_tdiff %>% group_by(des_pair) %>%
+                   summarize(m_dep_var = mean(dep_var, na.rm=T),
+                             sd_dep_var =sd(dep_var, na.rm=T),
+                             const_share_pred = mean(spot_share),
+                             sd_spot_share =sd(spot_share, na.rm=T),
+                             IIP_share_pred = mean(IIP_share, na.rm=T),
+                             sd_IIP_share = sd(IIP_share, na.rm=T),
+                             PI_share_pred = mean(PI_share, na.rm=T),
+                             sd_PI_share = sd(PI_share, na.rm=T))
+  
+test_data_tdiff <- modelling_data[-training_indices,] %>%
+                   merge(.,test_indep_vars, by=c("des_pair"), all.x=T)
 
 # #split total training data into feature selection data and training data
 # feature_indices <- createDataPartition(total_train_data_tdiff$dep_var,        #dependent var
@@ -190,7 +215,7 @@ prediction_tasks[i,1] <- target
 prediction_tasks[i,2] <- predictor
 prediction_tasks[i,3] <- nrow(modelling_data)
 prediction_tasks[i,4] <- nrow(prediction_data)
-prediction_tasks[i,5] <- coverage["const_share_pred",2]
+prediction_tasks[i,5] <- NA #coverage["const_share_pred",2]
 
 # #Select features
 # 
@@ -261,9 +286,12 @@ prediction_tasks[i,5] <- coverage["const_share_pred",2]
 #                                            paste(., collapse= "") %>%
 #                                            as.formula()
 
-form <- as.formula(dep_var ~ predictor + m_dep_var + const_share_pred + const_share_pred:predictor + sd_spot_share + 
-                     IIP_share_pred + sd_IIP_share + m_predictor + sd_predictor + n_group + delta_pred + PI_share_pred + sd_PI_share +
-                     year + r_conduit + s_conduit + r_sink + s_conduit -1)
+form <- as.formula(dep_var ~ m_dep_var + sd_dep_var +
+                             const_share_pred  + sd_spot_share + predictor +
+                             IIP_share_pred + sd_IIP_share + IIP_inward +
+                             m_predictor + sd_predictor + n_group + delta_pred + 
+                             PI_share_pred + sd_PI_share + A_ti_T_T +
+                             year + r_conduit + s_conduit + r_sink + s_conduit -1)
 
 
 ###############Training data################

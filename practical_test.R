@@ -53,6 +53,8 @@ practical_test_data <- data %>% merge(.,prediction_obs, by = c("s_iso3c", "r_iso
 practical_test_data[is.na(practical_test_data$war), "war"] <- 0
 practical_test_data[is.na(practical_test_data$civil_war), "civil_war"] <- 0
 
+
+
 #########plausibility check#####################
 practical_test_data[!is.na(practical_test_data$IN_BMD4) & practical_test_data$fin_center==0 ,] %>% group_by(year) %>% 
                summarize(mean_normal=sum(IN_BMD4), mean_adjusted=sum(adjusted), mean_naive=sum(naive), sum_BIT=sum(BIT)) %>% 
