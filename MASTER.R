@@ -81,6 +81,7 @@ rm(list=setdiff(ls(), c("quin_perfs",
                         "coverage_all", 
                         "prediction_tdiff", 
                         "prediction_tasks", 
+                        "test_tdiff",
                         "prediction_train_tdiff"))) 
 }
 

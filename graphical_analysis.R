@@ -128,15 +128,68 @@ graph_comparison_OUT <- ggplot(data = graph_data_comparison) + geom_point(aes(y=
 plot_grid(graph_BMD4, graph_BMD3,graph_comparison_IN,graph_comparison_OUT,  nrow = 2, labels = c('A', 'B', 'C', 'D'), align="hv")
 
 
+################# visualization of finflows technique ########################
+#example is based on harmonizing IN BMD4 with OUT BMD4
+finflow_example <- data %>% select(r_iso3c, s_iso3c, year, IN_BMD4, OUT_BMD4, IIP_inward) %>%
+                            filter(!is.na(IN_BMD4) & !is.na(OUT_BMD4)) %>%
+                            mutate(spot_share = case_when(OUT_BMD4!=0 & IN_BMD4!=0 ~ IN_BMD4/OUT_BMD4,
+                                                          OUT_BMD4==0 ~ 0,
+                                                          .default = NA),
+                                   IIP_share = case_when(IIP_inward != 0 ~ IN_BMD4/IIP_inward,
+                                                         IIP_inward == 0 ~ 0),)
+finflow_metrics <- matrix(nrow = 11, ncol=2) %>% as.data.frame()
+for (i in 1:11) {
+if (i==1) {
+finflow_metrics <- finflow_example %>% group_by(r_iso3c, s_iso3c) %>%
+                           mutate(n = row_number(),
+                                  pred_share = case_when(n==i ~ spot_share,
+                                                         .default = NA),
+                                  training_sample = case_when(n==i ~ 1,
+                                                              .default = 0)
+                                  ) %>%
+                           fill(.,pred_share, .direction="updown") %>%
+                           mutate(prediction = pred_share*OUT_BMD4) %>%
+                           ungroup() %>%
+                           filter(training_sample==0 ) %>% #& pred_share < 2 & pred_share > -2
+                           select(r_iso3c, s_iso3c, year, IN_BMD4, OUT_BMD4, prediction)
+                           # summarize(MAE_naive = round(mean(abs(IN_BMD4-OUT_BMD4), na.rm=T),digits = 2),
+                           #           MAE_growth = round(mean(abs(IN_BMD4-prediction), na.rm=T), digits = 2))
+} else {
+    merge <- finflow_example %>% group_by(r_iso3c, s_iso3c) %>%
+      mutate(n = row_number(),
+             pred_share = case_when(n==i ~ spot_share,
+                                    .default = NA),
+             training_sample = case_when(n==i ~ 1,
+                                         .default = 0)
+      ) %>%
+      fill(.,pred_share, .direction="updown") %>%
+      mutate(prediction = pred_share*OUT_BMD4) %>%
+      ungroup() %>%
+      filter(training_sample==0 ) %>% #& pred_share < 2 & pred_share > -2
+      select(r_iso3c, s_iso3c, year, IN_BMD4, OUT_BMD4, prediction)
+    finflow_metrics <- rbind(finflow_metrics,merge)
+  }
+}
+finflow_metrics <- finflow_metrics %>% group_by(r_iso3c, s_iso3c, year) %>%
+                   summarize(across(c("IN_BMD4", "OUT_BMD4", "prediction"), ~ mean(.x, na.rm=T)))
 
 
+#finflow_metrics %>% summarize(MAE_naive = mean(V1), MAE_growth = mean(V2))
+# excluding nothing leads to an 
+# excluding any shares above 2 leads to improvement of 38 percent of the absolute error
+
+######################### plotting ######################################
+
+plot1 <- ggplot(data=finflow_metrics, aes(y=IN_BMD4,x=OUT_BMD4)) + geom_point() +
+                labs(x="OUT BMD4",y="IN BMD4") + coord_cartesian(xlim=c(-500000,2000000))
+plot2 <- ggplot(data=finflow_metrics, aes(y=IN_BMD4,x=prediction)) + geom_point() +
+                labs(x="prediction",y="") + coord_cartesian(xlim=c(-500000,2000000)) + theme(axis.text.y=element_blank(),  #remove y axis labels
+                                                  axis.ticks.y=element_blank()  #remove y axis ticks
+                     )
+plot_grid(plot1,plot2,ncol = 2,
+          rel_widths = c(1.1, 1))
 
 
-
-#construct decision tree
-reg.tree <- rpart(data_tree$diff_inBMD4_outBMD4~., data=data_tree, method='anova')
-rpart.plot(reg.tree)
-printcp(reg.tree)
 
 ###########data coverage for ML-sample########################################## 
 #visualizations

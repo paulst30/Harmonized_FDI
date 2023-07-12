@@ -123,7 +123,7 @@ modelling_data <- working_data_wm %>% filter( !is.na(dep_var)) #[working_data_wm
 prediction_indep_vars <- modelling_data %>% group_by(des_pair) %>%
                          summarize(m_dep_var = mean(dep_var, na.rm=T),
                                   sd_dep_var =sd(dep_var, na.rm=T),
-                                  const_share_pred = mean(spot_share),
+                                  const_share_pred = mean(spot_share, na.rm=T),
                                   sd_spot_share =sd(spot_share, na.rm=T),
                                   IIP_share_pred = mean(IIP_share, na.rm=T),
                                   sd_IIP_share = sd(IIP_share, na.rm=T),
@@ -298,7 +298,7 @@ form <- as.formula(dep_var ~ m_dep_var + sd_dep_var +
 
 #########training sample for total difference#############
 #exclude variables that should not be used for prediction
-dep_tdiff <- train_data_tdiff %>% select(dep_var, predictor, s_iso3c, r_iso3c, des_pair, year)
+dep_tdiff <- train_data_tdiff %>% select(dep_var, predictor, s_iso3c, r_iso3c, des_pair, year, const_share_pred)
 
 train_data_tdiff <- model.matrix.lm(form, data = train_data_tdiff, na.action="na.pass") %>% as.matrix()
 
@@ -323,14 +323,14 @@ xgb_train_tdiff_sp <- as(train_data_tdiff, "dgCMatrix")
 #xgb_train_difffellow_sp <- as(xgb_train_difffellow, "dgCMatrix")
 
 ################# test sample ################################
-dep_test_tdiff <- test_data_tdiff %>% select(dep_var, predictor, s_iso3c, r_iso3c, year)
+dep_test_tdiff <- test_data_tdiff %>% select(dep_var, predictor, s_iso3c, r_iso3c, year, const_share_pred)
 
 test_data_tdiff <- model.matrix.lm(form, data = test_data_tdiff, na.action="na.pass") %>% as.matrix()
 
 xgb_test_tdiff_sp <- as(test_data_tdiff, "dgCMatrix")
 
 ################ prediction data ############################
-dep_pred_tdiff <- prediction_data %>% select(dep_var, predictor, s_iso3c, r_iso3c, des_pair, year)
+dep_pred_tdiff <- prediction_data %>% select(dep_var, predictor, s_iso3c, r_iso3c, des_pair, year, const_share_pred)
 
 prediction_data <- model.matrix.lm(form, data = prediction_data, na.action="na.pass") %>% as.matrix()
 
