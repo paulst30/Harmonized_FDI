@@ -1,74 +1,4 @@
 #Setup 
-#install.packages("tidyverse")
-#install.packages("ggplot2")
-#install.packages("haven")
-#install.packages("rpart")
-#install.packages("rpart.plot")
-#install.packages("caret")
-#install.packages("expss")
-#install.packages("randomForest")
-#install.packages("gbm")
-#install.packages("randomForestSRC")
-#install.packages("missForest")
-#install.packages("foreign")
-#install.packages("mlbench")
-#install.packages("xtable")
-#install.packages("xgboost")
-#install.packages("Matrix")
-#install.packages("cowplot")
-#install.packages("FactoMineR")
-#install.packages("car")
-#install.packages("glmnet")
-#install.packages("RANN")
-#install.packages("diversityForest")
-#install.packages("stringr")
-#install.packages("MatchIt")
-#install.packages("doBy")
-#install.packages("neuralnet")
-
-
-
-library(tidyverse)
-library(ggplot2)
-library(haven)
-library(foreign)
-library(rpart)
-library(rpart.plot)
-library(lattice)
-library(caret)
-library(expss)
-library(randomForest)
-library(gbm)
-library(randomForestSRC)
-library(missForest)
-library(leaps)
-library(mlbench)
-library(xtable)
-library(xgboost)
-library(Matrix)
-library(cowplot)
-library(corrplot)
-library(FactoMineR)
-library(car)
-library(glmnet)
-library(RANN)
-library(diversityForest)
-library(stringr)
-library(MatchIt)
-library(doBy)
-library(neuralnet)
-library(party)
-
-
-#read in Stata data
-data <- read_dta('quality_analysis_ml_data.dta') 
-data <- as.data.frame(do.call(cbind, data))
-data[,-c(1,2,8)] <- data[,-c(1,2,8)] %>% mutate(across(everything(), as.numeric))
-
-# generate combination matrix for different algorithms
-predictor_matrix <- data.frame(dep_var= c("IN_BMD4", "IN_BMD4", "IN_BMD4", "OECD_IN_BMD3", "OECD_IN_BMD3", "OUT_BMD4"),
-                      predictor = c("OUT_BMD4", "OECD_OUT_BMD3", "OECD_IN_BMD3", "OUT_BMD4", "OECD_OUT_BMD3", "OECD_OUT_BMD3"))
-
  
 #define dependent var and main predictor
 target <- predictor_matrix[1,"dep_var"]                             #save dependent variable in a separate value
@@ -76,16 +6,6 @@ predictor <- predictor_matrix[1,"predictor"]
 
 data$dep_var <- data[,target]                      #flexible dependent variable for all 6 mapping procedures 
 data$predictor <- c(data[,predictor])                 #flexible main predictor
-
-data <- data %>% mutate(inclusion= case_when(!is.na(IN_BMD4) ~ "IN_BMD4",
-                                             is.na(IN_BMD4) & !is.na(OECD_IN_BMD3) ~ "IN_BMD3",
-                                             is.na(IN_BMD4) & is.na(OECD_IN_BMD3) & !is.na(OUT_BMD4) ~ "OUT_BMD4",
-                                             is.na(IN_BMD4) & is.na(OECD_IN_BMD3) & is.na(OUT_BMD4) & !is.na(OECD_OUT_BMD3) ~ "OUT_BMD3",
-                                             .default = "")) %>%
-                        group_by(des_pair) %>%
-                        mutate(target_var = case_when(as.logical(max(inclusion=="IN_BMD4", na.rm = T)) ~ "IN_BMD4",
-                                                      as.logical(max(inclusion!="IN_BMD4" & inclusion=="IN_BMD3" , na.rm = T)) ~ "IN_BMD3",
-                                                      as.logical(max(inclusion!="IN_BMD4" & inclusion!="IN_BMD3" & inclusion=="OUT_BMD4" , na.rm = T)) ~ "OUT_BMD4"))
 
 
 #build additional features

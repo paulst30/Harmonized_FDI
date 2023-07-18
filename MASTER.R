@@ -59,6 +59,7 @@ library(MatchIt)
 library(doBy)
 library(neuralnet)
 library(fixest)
+library(party)
 
 
 quin_perfs <- list()
@@ -69,11 +70,11 @@ prediction_summary_tdiff <- matrix(nrow = 6, ncol=6) %>% as.data.frame()
 colnames(prediction_summary_tdiff) <- c("TrainRMSE", "TrainR2", "TrainMAE" , "TestRMSE", "TestR2", "TestMAE")
 prediction_tasks <- matrix(nrow=6, ncol=5)
 
+source("data.R")
 for (i in 1:6) {
 source("Setup.R")
-source("total_diff_train.R")
+source("mob.R")
 rm(list=setdiff(ls(), c("quin_perfs", 
-                        "varimps", 
                         "besttune", 
                         "graphs", 
                         "prediction_summary_tdiff", 
@@ -81,7 +82,9 @@ rm(list=setdiff(ls(), c("quin_perfs",
                         "prediction_tdiff", 
                         "prediction_tasks", 
                         "test_tdiff",
-                        "prediction_train_tdiff"))) 
+                        "prediction_train_tdiff",
+                        "predictor_matrix",
+                        "data"))) 
 }
 
 source("results.R")
