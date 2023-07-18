@@ -11,6 +11,7 @@ folds <- createFolds(train_data_tdiff$dep_var, k = 10, list = F)
 for (alpha in c(0.001,0.005)){
   for (fold in 1:10) {
     #generate features on training data only
+    print(paste0("run: ", i, "; fold: ", fold))
     analysis_set <- train_data_tdiff[folds!=fold,] %>% group_by(des_pair) %>%
                                                     mutate(n_predictor = sum(!is.na(predictor) & !is.na(dep_var)),
                                                          n_IIP = sum(!is.na(IIP_inward) & !is.na(dep_var)),
