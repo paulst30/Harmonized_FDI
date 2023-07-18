@@ -1,15 +1,23 @@
 #Setup 
  
 #define dependent var and main predictor
-target <- predictor_matrix[1,"dep_var"]                             #save dependent variable in a separate value
-predictor <- predictor_matrix[1,"predictor"]
+target <- predictor_matrix[i,"dep_var"]                             #save dependent variable in a separate value
+predictor <- predictor_matrix[i,"predictor"]
 
-data$dep_var <- data[,target]                      #flexible dependent variable for all 6 mapping procedures 
-data$predictor <- c(data[,predictor])                 #flexible main predictor
+# data$dep_var <- data[,target]                      #flexible dependent variable for all 6 mapping procedures 
+# data$predictor <- c(data[,predictor])                 #flexible main predictor
 
 
 #build additional features
-data <-  mutate(data, spot_share = case_when(predictor!=0 & dep_var!=0 ~ dep_var/predictor,
+data <-  mutate(data, dep_var=case_when(i<=3 ~ OECD_IN_BMD3,
+                                        3<i & i<=5 ~ OECD_OUT_BMD3,
+                                        i==6 ~ IN_BMD4),
+                      predictor=case_when(i==1 ~ IN_BMD4,
+                                          i==2 ~ OUT_BMD4,
+                                          i==3 ~ OECD_OUT_BMD3,
+                                          i==4 ~ IN_BMD4,
+                                          i>=5 ~ OUT_BMD4),
+                         spot_share = case_when(predictor!=0 & dep_var!=0 ~ dep_var/predictor,
                                                 predictor==0 ~ 1),
                          IIP_share = case_when(IIP_inward != 0 ~ dep_var/IIP_inward,
                                                IIP_inward == 0 ~ 0),

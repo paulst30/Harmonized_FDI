@@ -255,5 +255,5 @@ merge <- prediction_set %>% select(s_iso3c, r_iso3c, year, dep_var, predictor) %
                       mutate(prediction=predict(final_mob, newdata=prediction_set),
                              target = target,
                              predictor = predictor)
-prediction_test_tdiff <- rbind(prediction_test_tdiff, merge)
+prediction_tdiff <- rbind(prediction_tdiff, merge)
 }
