@@ -62,12 +62,11 @@ library(fixest)
 
 
 quin_perfs <- list()
-varimps <- list()
 besttune <- list()
 coverage_all <- list()
 graphs <- list()
-prediction_summary_tdiff <- matrix(nrow = 6, ncol=7) %>% as.data.frame()
-colnames(prediction_summary_tdiff) <- c("TrainRMSE", "TrainR2", "TrainMAE", "Method" , "TestRMSE", "TestR2", "TestMAE")
+prediction_summary_tdiff <- matrix(nrow = 6, ncol=6) %>% as.data.frame()
+colnames(prediction_summary_tdiff) <- c("TrainRMSE", "TrainR2", "TrainMAE" , "TestRMSE", "TestR2", "TestMAE")
 prediction_tasks <- matrix(nrow=6, ncol=5)
 
 for (i in 1:6) {

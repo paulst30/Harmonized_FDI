@@ -1,39 +1,4 @@
 
-  group_by(des_pair) %>%
-  mutate(n_predictor = sum(!is.na(predictor) & !is.na(dep_var)),
-         n_IIP = sum(!is.na(IIP_inward) & !is.na(dep_var)),
-         n_PI = sum(!is.na(A_ti_T_T) &  !is.na(dep_var)),
-         n_zero = sum(predictor==0, na.rm = T),
-         mean_predictor = mean(predictor, na.rm = T),
-         m_spot_share = mean(spot_share, na.rm =T),
-         m_IIP_share = mean(IIP_share, na.rm = T),
-         m_PI_share = mean(PI_share, na.rm = T),
-         rsd_dep_var = sd(dep_var, na.rm = T)/mean(dep_var, na.rm = T),
-         sd_spot_share = sd(spot_share, na.rm=T),
-         sd_PI_share = sd(PI_share, na.rm = T),
-         sd_IIP_share = sd(IIP_share, na.rm =T),
-         rsd_predictor = sd(predictor, na.rm = T)/mean(predictor, na.rm=T)) %>%
-  ungroup()
-
-
-# restrict sample 
-test_data <- data %>% filter(!is.na(dep_var) & target_var=="OECD_IN_BMD3" & !is.na(predictor)) %>% 
-                      select(dep_var, predictor, IIP_inward, A_ti_T_T, mis_IIP, mis_PI,
-                             n_predictor, n_IIP, n_PI, mean_predictor, m_spot_share, m_IIP_share, m_PI_share,
-                             rsd_dep_var, rsd_predictor, sd_spot_share, sd_PI_share, sd_IIP_share)
-#replacing NAs with Inf or zeros
-test_data <- test_data %>% mutate(across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
-                                  across(starts_with("sd"), ~replace_na(.,Inf)),
-                                  across(starts_with("m"), ~replace_na(.,-Inf)),
-                                  across(starts_with("n"), ~replace_na(.,0))) %>%
-                           mutate(across(starts_with("m_"), ~atan(.)*180/pi),
-                                  across(starts_with("sd"), ~atan(.)*180/pi),
-                                  across(starts_with("rsd"), ~replace_na(Inf))) %>%
-                           mutate(across(starts_with("m_"), round,0),
-                                  across(starts_with("sd"), round,0),
-                                  across(starts_with("rsd"), round,1))
-# simple mob
-library(party)
 formula = as.formula("dep_var ~ predictor + IIP_inward + A_ti_T_T -1 |
                                              rsd_dep_var + rsd_predictor +
                                              mis_IIP + mis_PI +
@@ -74,7 +39,7 @@ for (alpha in c(0.001,0.005)){
                                                          across(starts_with("rsd"), round,1))
     
     #fit the model
-    simple_mob <- mob(formula = formula, 
+    simple_mob <- mob(formula = formula,
                   data=analysis_set,
                   model = glinearModel,
                   na.action = na.pass,
@@ -128,7 +93,7 @@ best_tune <- prediction_train_tdiff %>% filter(run == i) %>% group_by(fold, alph
 besttune[i] <- list(best_tune)
 
 #only keep hold-out predictions for the best-tuned model
-prediction_train_tdiff <- prediction_train_tdiff %>% filter(run!=i & (run==i & alpha==best_tune$alpha))
+prediction_train_tdiff <- prediction_train_tdiff %>% filter(run!=i | (run==i & alpha==best_tune$alpha))
 
 # train performance
 train_performance <- prediction_train_tdiff %>% filter(run == i) %>% group_by(fold) %>%
@@ -140,15 +105,15 @@ train_performance <- prediction_train_tdiff %>% filter(run == i) %>% group_by(fo
                                       RMSE=mean(RMSE),
                                       pRsquared=mean(pRsquared))
 # quintile performance
-prediction_train_tdiff %>% filter(run == i) %>% 
-  mutate(quintile = ntile(predictor, 10)) %>%
-  group_by(quintile) %>%
-  summarise(
-    min = min(predictor),
-    max = max(predictor),
-    ImpRate = round(mean(abs(dep_var-prediction)<=abs(dep_var-predictor)) ,digits = 2),
-    Errorred = round(1-(sum(abs(dep_var-prediction), na.rm=T)/sum(abs(dep_var-predictor), na.rm=T)), digits=2),
-    pRsquared = round(1-(sum((dep_var-prediction)^2, na.rm=T)/sum((dep_var)^2, na.rm=T)), digits=2)
+quin_perf_tdiff <- prediction_train_tdiff %>% filter(run == i) %>% 
+                    mutate(quintile = ntile(predictor, 10)) %>%
+                    group_by(quintile) %>%
+                    summarise(
+                      min = min(predictor),
+                      max = max(predictor),
+                      ImpRate = round(mean(abs(dep_var-prediction)<=abs(dep_var-predictor)) ,digits = 2),
+                      Errorred = round(1-(sum(abs(dep_var-prediction), na.rm=T)/sum(abs(dep_var-predictor), na.rm=T)), digits=2),
+                      pRsquared = round(1-(sum((dep_var-prediction)^2, na.rm=T)/sum((dep_var)^2, na.rm=T)), digits=2)
   )
 print(quin_perf_tdiff)
 quin_perfs[i] <- list(quin_perf_tdiff)
