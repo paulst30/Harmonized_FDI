@@ -97,7 +97,9 @@ data <-  mutate(data, spot_share = case_when(predictor!=0 & dep_var!=0 ~ dep_var
                                               A_ti_T_T == 0 ~ 0),
                          mis_predictor = is.na(predictor),
                          mis_IIP = is.na(IIP_inward),
-                         mis_PI = is.na(A_ti_T_T)) %>%
+                         mis_PI = is.na(A_ti_T_T),
+                         across(starts_with("mis"), as.numeric)
+                ) %>%
                   group_by(des_pair) %>%
                   mutate(m_predictor = mean(predictor, na.rm = T)) %>%
                          ungroup() 
