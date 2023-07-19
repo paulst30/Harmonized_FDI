@@ -94,7 +94,13 @@ working_data_wm <- data %>%
 modelling_data <- working_data_wm %>% filter( !is.na(dep_var)) #[working_data_wm$des_pair %in% training_pairs,]!is.na(OUT_BMD4) &
 prediction_data <- working_data_wm %>% filter(is.na(dep_var) & target_var==target & !is.na(predictor))  #!is.na(OUT_BMD4) &
 
-
+# save length of prediction
+prediction_tasks[i,1] <- target
+prediction_tasks[i,2] <- predictor
+prediction_tasks[i,3] <- nrow(modelling_data)
+prediction_tasks[i,4] <- nrow(prediction_data)
+prediction_tasks[i,5] <- length(intersect(unique(prediction_data$des_pair),
+                                          unique(modelling_data$des_pair)))/length(unique(prediction_data$des_pair))
 
 # check the missingness of data
 p_data <- prediction_data %>%

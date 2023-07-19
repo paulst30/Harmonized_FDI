@@ -8,7 +8,7 @@ formula = as.formula("dep_var ~ predictor + IIP_inward + A_ti_T_T -1 |
 #create folds
 folds <- createFolds(train_data_tdiff$dep_var, k = 10, list = F)
 
-for (alpha in c(0.001,0.005)){
+for (alpha in c(0.0005,0.001)){
   for (fold in 1:10) {
     #generate features on training data only
     print(paste0("run: ", i, "; fold: ", fold))
@@ -31,7 +31,7 @@ for (alpha in c(0.001,0.005)){
                                                          rsd_dep_var, rsd_predictor, sd_spot_share, sd_PI_share, sd_IIP_share) %>%
                                                   mutate(across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
                                                          across(starts_with("sd"), ~replace_na(.,Inf)),
-                                                         across(starts_with("m"), ~replace_na(.,-Inf)),
+                                                         across(starts_with("m"), ~replace_na(.,1)),
                                                          across(starts_with("n"), ~replace_na(.,0))) %>%
                                                   mutate(across(ends_with("share"), ~atan(.)*180/pi),
                                                          across(starts_with("rsd"), ~replace_na(.,Inf))) %>%
@@ -55,7 +55,7 @@ for (alpha in c(0.001,0.005)){
     assessment_set <- train_data_tdiff[folds==fold,] %>% merge(.,merge, by=c("s_iso3c" ,"r_iso3c"), all.x = T) %>%
                                                         mutate(across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
                                                                across(starts_with("sd"), ~replace_na(.,90)),
-                                                               across(starts_with("m"), ~replace_na(.,-90)),
+                                                               across(starts_with("m"), ~replace_na(.,45)),
                                                                across(starts_with("n"), ~replace_na(.,0)),
                                                                m_predictor = ntile(m_predictor, n=20)) %>%
                                                         select(s_iso3c, r_iso3c, year, dep_var, predictor, IIP_inward, A_ti_T_T, mis_IIP, mis_PI,
@@ -64,14 +64,14 @@ for (alpha in c(0.001,0.005)){
     
     
     #save predictions on assessment set
-    if (i==1 & fold==1 & alpha==0.001){
-        prediction_train_tdiff <- assessment_set %>% select(s_iso3c, r_iso3c, year, dep_var, predictor) %>%
+    if (i==1 & fold==1 & alpha==0.0005){
+        prediction_train_tdiff <- assessment_set %>% 
                                   mutate(prediction = predict(simple_mob, newdata=assessment_set),
                                          fold = fold,
                                          alpha = alpha,
                                          run = i)
     } else {
-        merge <- assessment_set %>% select(s_iso3c, r_iso3c, year, dep_var, predictor) %>%
+        merge <- assessment_set %>% 
                  mutate(prediction = predict(simple_mob, newdata=assessment_set),
                         fold = fold,
                         alpha = alpha,
@@ -102,9 +102,9 @@ train_performance <- prediction_train_tdiff %>% filter(run == i) %>% group_by(fo
                                       RMSE =sqrt(mean((dep_var-prediction)^2, na.rm=T)),
                                       pRsquared = round(1-(sum((dep_var-prediction)^2, na.rm=T)/sum((dep_var)^2, na.rm=T)), digits=2)) %>%
                             ungroup() %>% 
-                            summarize(MAE=mean(MAE),
-                                      RMSE=mean(RMSE),
-                                      pRsquared=mean(pRsquared))
+                            summarize(RMSE=mean(RMSE),
+                                      pRsquared=mean(pRsquared),
+                                      MAE=mean(MAE))
 # quintile performance
 quin_perf_tdiff <- prediction_train_tdiff %>% filter(run == i) %>% 
                     mutate(quintile = ntile(predictor, 10)) %>%
@@ -139,7 +139,7 @@ training_set <- train_data_tdiff %>% group_by(des_pair) %>%
                                rsd_dep_var, rsd_predictor, sd_spot_share, sd_PI_share, sd_IIP_share) %>%
                         mutate(across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
                                across(starts_with("sd"), ~replace_na(.,Inf)),
-                               across(starts_with("m"), ~replace_na(.,-Inf)),
+                               across(starts_with("m"), ~replace_na(.,-1)),
                                across(starts_with("n"), ~replace_na(.,0))) %>%
                         mutate(across(ends_with("share"), ~atan(.)*180/pi),
                                across(starts_with("rsd"), ~replace_na(.,Inf))) %>%
@@ -155,6 +155,7 @@ train_mob <- mob(formula = formula,
                   control = mob_control(alpha = best_tune$alpha,
                                         minsplit = 20,
                                         verbose = F))
+train_models[i] <- train_mob
 
 #add features to test set 
 merge <- training_set %>% select(s_iso3c, r_iso3c, n_predictor, n_IIP, n_PI,  m_spot_share,m_IIP_share,
@@ -163,7 +164,7 @@ merge <- training_set %>% select(s_iso3c, r_iso3c, n_predictor, n_IIP, n_PI,  m_
 test_set <- test_data_tdiff %>% merge(.,merge, by=c("s_iso3c" ,"r_iso3c"), all.x = T) %>%
   mutate(across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
          across(starts_with("sd"), ~replace_na(.,90)),
-         across(starts_with("m"), ~replace_na(.,-90)),
+         across(starts_with("m"), ~replace_na(.,45)),
          across(starts_with("n"), ~replace_na(.,0)),
          across(starts_with("rsd_"), ~replace_na(.,Inf)),
          m_predictor = ntile(m_predictor, n=20)) %>%
@@ -173,11 +174,11 @@ test_set <- test_data_tdiff %>% merge(.,merge, by=c("s_iso3c" ,"r_iso3c"), all.x
 
 # predict test data and save predictions
 if (i==1) {
- prediction_test_tdiff <- test_set %>% select(s_iso3c, r_iso3c, year, dep_var, predictor) %>%
+ prediction_test_tdiff <- test_set %>%
                                       mutate(prediction=predict(train_mob, newdata=test_set),
                                              run = i) 
 } else {
-  merge <- test_set %>% select(s_iso3c, r_iso3c, year, dep_var, predictor) %>%
+  merge <- test_set %>% 
                         mutate(prediction=predict(train_mob, newdata=test_set),
                         run = i)
   prediction_test_tdiff <- rbind(prediction_test_tdiff, merge)
@@ -185,9 +186,9 @@ if (i==1) {
 
 #calculate test performance
 test_performance <- prediction_test_tdiff %>% filter(run==i) %>%
-  summarize(test_MAE = round(mean(abs(dep_var-prediction), na.rm=T), digits=0),
-            test_RMSE =sqrt(mean((dep_var-prediction)^2, na.rm=T)),
-            test_pRsquared = round(1-(sum((dep_var-prediction)^2, na.rm=T)/sum((dep_var)^2, na.rm=T)), digits=2))
+  summarize(test_RMSE =sqrt(mean((dep_var-prediction)^2, na.rm=T)),
+            test_pRsquared = round(1-(sum((dep_var-prediction)^2, na.rm=T)/sum((dep_var)^2, na.rm=T)), digits=2),
+            test_MAE = round(mean(abs(dep_var-prediction), na.rm=T), digits=0))
 
 #combine performances on test and training sets
 prediction_summary_tdiff[i,]<- c(train_performance, test_performance)
@@ -213,7 +214,7 @@ modelling_set <- modelling_data %>% group_by(des_pair) %>%
                              rsd_dep_var, rsd_predictor, sd_spot_share, sd_PI_share, sd_IIP_share) %>%
                       mutate(across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
                              across(starts_with("sd"), ~replace_na(.,Inf)),
-                             across(starts_with("m"), ~replace_na(.,-Inf)),
+                             across(starts_with("m"), ~replace_na(.,1)),
                              across(starts_with("n"), ~replace_na(.,0))) %>%
                       mutate(across(ends_with("share"), ~atan(.)*180/pi),
                              across(starts_with("rsd"), ~replace_na(.,Inf))) %>%
@@ -236,7 +237,7 @@ merge <- modelling_set %>% select(s_iso3c, r_iso3c, n_predictor, n_IIP, n_PI,  m
 prediction_set <- prediction_data %>% merge(.,merge, by=c("s_iso3c" ,"r_iso3c"), all.x = T) %>%
                               mutate(across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
                                      across(starts_with("sd"), ~replace_na(.,90)),
-                                     across(starts_with("m"), ~replace_na(.,-90)),
+                                     across(starts_with("m"), ~replace_na(.,45)),
                                      across(starts_with("n"), ~replace_na(.,0)),
                                      across(starts_with("rsd_"), ~replace_na(.,Inf)),
                                      m_predictor = ntile(m_predictor, n=20)) %>%
@@ -246,12 +247,12 @@ prediction_set <- prediction_data %>% merge(.,merge, by=c("s_iso3c" ,"r_iso3c"),
                             
 # predict test data and save predictions
 if (i==1) {
-prediction_tdiff <- prediction_set %>% select(s_iso3c, r_iso3c, year, dep_var, predictor) %>%
+prediction_tdiff <- prediction_set %>% 
                                       mutate(prediction=predict(final_mob, newdata=prediction_set),
                                              target = target,
                                              predictor = predictor)
 } else {
-merge <- prediction_set %>% select(s_iso3c, r_iso3c, year, dep_var, predictor) %>%
+merge <- prediction_set %>% 
                       mutate(prediction=predict(final_mob, newdata=prediction_set),
                              target = target,
                              predictor = predictor)

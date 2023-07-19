@@ -69,6 +69,7 @@ graphs <- list()
 prediction_summary_tdiff <- matrix(nrow = 6, ncol=6) %>% as.data.frame()
 colnames(prediction_summary_tdiff) <- c("TrainRMSE", "TrainR2", "TrainMAE" , "TestRMSE", "TestR2", "TestMAE")
 prediction_tasks <- matrix(nrow=6, ncol=5)
+train_models <- list()
 
 source("data.R")
 for (i in 1:6) {
