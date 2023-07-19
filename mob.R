@@ -1,6 +1,5 @@
 
 formula = as.formula("dep_var ~ predictor + IIP_inward + A_ti_T_T -1 |
-                                             rsd_dep_var + rsd_predictor +
                                              mis_IIP + mis_PI +
                                              sd_spot_share + sd_IIP_share + sd_PI_share + 
                                              m_spot_share + m_IIP_share + m_PI_share + n_predictor + n_IIP + n_PI")
