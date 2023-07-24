@@ -59,7 +59,7 @@ library(MatchIt)
 library(doBy)
 library(neuralnet)
 library(fixest)
-library(party)
+library(partykit)
 
 
 quin_perfs <- list()

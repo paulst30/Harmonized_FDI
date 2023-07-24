@@ -29,8 +29,20 @@ data <-  mutate(data, dep_var=case_when(i<=3 ~ OECD_IN_BMD3,
                          across(starts_with("mis"), as.numeric)
                 ) %>%
                   group_by(des_pair) %>%
-                  mutate(m_predictor = mean(predictor, na.rm = T)) %>%
+                  mutate(m_predictor = mean(predictor, na.rm = T),
+                         across(c("predictor", "dep_var"), 
+                                list(L1 = ~lag(.x, n=1L), L2 = ~lag(.x, n=2L), L3 = ~lag(.x, n=3L),
+                                     F1 = ~lead(.x, n=1L), F2 = ~ lead(.x, n=2L), F3 = ~lead(.x, n=3L)), 
+                                .names="{.fn}_{.col}")) %>%
                          ungroup() 
+
+                         # delta_predictor = predictor-lag(predictor,n = 1L, order_by = year),
+                         # ag_predictor = mean(delta_predictor, na.rm =T),
+                         # p_spot_share = case_when(lag(predictor, n=1L)!=0 & dep_var!=0 ~ dep_var/(lag(predictor, n =1L)),
+                         #                          lag(predictor, n=1L)==0 ~ 1),
+                         # p2_spot_share = case_when(lag(predictor, n=2L)!=0 & dep_var!=0 ~ dep_var/(lag(predictor, n =2L)),
+                         #                           lag(predictor, n=2L)==0 ~ 1)) %>%
+                         # ungroup() 
 
 # detect "outliers", i.e. pairs in which inward stocks are likely not better than outward stocks. 
 

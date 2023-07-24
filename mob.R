@@ -1,8 +1,12 @@
 
-formula = as.formula("dep_var ~ predictor + IIP_inward + A_ti_T_T -1 |
+# formula = as.formula("dep_var ~ predictor + IIP_inward + A_ti_T_T -1 |
+#                                              mis_IIP + mis_PI +
+#                                              sd_spot_share + sd_IIP_share + sd_PI_share + 
+#                                              m_spot_share + m_IIP_share + m_PI_share + n_predictor + n_IIP + n_PI")
+formula = as.formula("dep_var ~ predictor + A_ti_T_T  -1 |
                                              mis_IIP + mis_PI +
-                                             sd_spot_share + sd_IIP_share + sd_PI_share + 
-                                             m_spot_share + m_IIP_share + m_PI_share + n_predictor + n_IIP + n_PI")
+                                             sd_spot_share +  sd_PI_share + 
+                                             m_spot_share + n_predictor + m_PI_share + m_predictor + n_PI")
 
 #create folds
 folds <- createFolds(train_data_tdiff$dep_var, k = 10, list = F)
@@ -39,27 +43,50 @@ for (alpha in c(0.0005,0.001)){
                                                          across(starts_with("rsd"), round,1))
     
     #fit the model
-    simple_mob <- mob(formula = formula,
+    simple_mob <- lmtree(formula = formula,
                   data=analysis_set,
-                  model = glinearModel,
                   na.action = na.pass,
-                  control = mob_control(alpha = alpha,
-                                        minsplit = 20,
-                                        verbose = F))
+                  alpha = alpha,
+                  prune = "AIC",
+                  minsplit = 20,
+                  verbose = F)
     
     # generate assessment set
     merge <- analysis_set %>% select(s_iso3c, r_iso3c, n_predictor, n_IIP, n_PI,  m_spot_share,m_IIP_share,
                                      m_PI_share, rsd_dep_var, sd_spot_share, sd_PI_share,sd_IIP_share,rsd_predictor) %>%
                               unique()
-    assessment_set <- train_data_tdiff[folds==fold,] %>% merge(.,merge, by=c("s_iso3c" ,"r_iso3c"), all.x = T) %>%
-                                                        mutate(across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
-                                                               across(starts_with("sd"), ~replace_na(.,90)),
-                                                               across(starts_with("m"), ~replace_na(.,45)),
-                                                               across(starts_with("n"), ~replace_na(.,0)),
-                                                               m_predictor = ntile(m_predictor, n=20)) %>%
-                                                        select(s_iso3c, r_iso3c, year, dep_var, predictor, IIP_inward, A_ti_T_T, mis_IIP, mis_PI,
-                                                               n_predictor, n_IIP, n_PI, m_predictor, m_spot_share, m_IIP_share, m_PI_share,
-                                                               rsd_dep_var, rsd_predictor, sd_spot_share, sd_PI_share, sd_IIP_share)
+    assessment_set <- train_data_tdiff[folds==fold,] %>% group_by(des_pair) %>%
+                    mutate(pl1_spot_share = case_when(is.na(lag(dep_var, n=1L)) & L1_dep_var!=0 & predictor!=0 ~ L1_dep_var/predictor,
+                                                      is.na(lag(dep_var, n=1L)) & L1_dep_var==0 ~ NA),
+                           pl2_spot_share = case_when(is.na(lag(dep_var, n=2L)) & L2_dep_var!=0 & predictor!=0 ~ L3_dep_var/predictor,
+                                                      is.na(lag(dep_var, n=2L)) & L2_dep_var==0 ~ NA),
+                           pl3_spot_share = case_when(is.na(lag(dep_var, n=3L)) & L3_dep_var!=0 & predictor!=0 ~ L3_dep_var/predictor,
+                                                      is.na(lag(dep_var, n=3L)) & L3_dep_var==0 ~ NA),
+                           pf1_spot_share = case_when(is.na(lead(dep_var, n=1L)) & F1_dep_var!=0 & predictor!=0 ~ F1_dep_var/predictor,
+                                                      is.na(lead(dep_var, n=1L)) & F1_dep_var==0 ~ NA),
+                           pf2_spot_share = case_when(is.na(lead(dep_var, n=2L)) & F2_dep_var!=0 & predictor!=0 ~ F2_dep_var/predictor,
+                                                      is.na(lead(dep_var, n=2L)) & F2_dep_var==0 ~ NA),
+                           pf3_spot_share = case_when(is.na(lead(dep_var, n=3L)) & F3_dep_var!=0 & predictor!=0 ~ F3_dep_var/predictor,
+                                                      is.na(lead(dep_var, n=3L)) & F3_dep_var==0 ~ NA),
+                           across(starts_with(c("pl","pf")), ~ mean(., na.rm=T)),
+                           m_p_spot_share = case_when(!is.na(pl1_spot_share) ~ pl1_spot_share,
+                                                    !is.na(pf1_spot_share) ~ pf1_spot_share,
+                                                    !is.na(pl2_spot_share) ~ pl2_spot_share,
+                                                    !is.na(pf2_spot_share) ~ pf2_spot_share,
+                                                    !is.na(pl3_spot_share) ~ pl3_spot_share,
+                                                    !is.na(pf3_spot_share) ~ pf3_spot_share)) %>%
+                    ungroup() %>% 
+                    merge(.,merge, by=c("s_iso3c" ,"r_iso3c"), all.x = T) %>%
+                    mutate(m_spot_share = case_when(is.na(m_spot_share) ~ atan(m_p_spot_share)*180/pi,
+                                                    .default = m_spot_share),
+                           across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
+                           across(starts_with("sd"), ~replace_na(.,90)),
+                           across(starts_with("m"), ~replace_na(.,45)),
+                           across(starts_with("n"), ~replace_na(.,0)),
+                           m_predictor = ntile(m_predictor, n=20)) %>%
+                           select(s_iso3c, r_iso3c, year, dep_var, predictor, IIP_inward, A_ti_T_T, mis_IIP, mis_PI,
+                                  n_predictor, n_IIP, n_PI, m_predictor, m_spot_share, m_IIP_share, m_PI_share,
+                                  rsd_dep_var, rsd_predictor, sd_spot_share, sd_PI_share, sd_IIP_share)
     
     
     #save predictions on assessment set
@@ -138,7 +165,7 @@ training_set <- train_data_tdiff %>% group_by(des_pair) %>%
                                rsd_dep_var, rsd_predictor, sd_spot_share, sd_PI_share, sd_IIP_share) %>%
                         mutate(across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
                                across(starts_with("sd"), ~replace_na(.,Inf)),
-                               across(starts_with("m"), ~replace_na(.,-1)),
+                               across(starts_with("m"), ~replace_na(.,1)),
                                across(starts_with("n"), ~replace_na(.,0))) %>%
                         mutate(across(ends_with("share"), ~atan(.)*180/pi),
                                across(starts_with("rsd"), ~replace_na(.,Inf))) %>%
@@ -147,21 +174,44 @@ training_set <- train_data_tdiff %>% group_by(des_pair) %>%
                                across(starts_with("rsd"), round,1))
 
 #fit the model
-train_mob <- mob(formula = formula, 
+train_mob <- lmtree(formula = formula, 
                   data=training_set,
-                  model = glinearModel,
                   na.action = na.pass,
-                  control = mob_control(alpha = best_tune$alpha,
-                                        minsplit = 20,
-                                        verbose = F))
-train_models[i] <- train_mob
+                  alpha = best_tune$alpha,
+                  prune = "AIC",
+                  minsplit = 20,
+                  verbose = F)
+train_models[i] <- list(train_mob)
 
 #add features to test set 
 merge <- training_set %>% select(s_iso3c, r_iso3c, n_predictor, n_IIP, n_PI,  m_spot_share,m_IIP_share,
                                  m_PI_share, rsd_dep_var, sd_spot_share, sd_PI_share,sd_IIP_share,rsd_predictor) %>%
                                  unique()
-test_set <- test_data_tdiff %>% merge(.,merge, by=c("s_iso3c" ,"r_iso3c"), all.x = T) %>%
-  mutate(across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
+test_set <- test_data_tdiff %>% group_by(des_pair) %>%
+  mutate(pl1_spot_share = case_when(is.na(lag(dep_var, n=1L)) & L1_dep_var!=0 & predictor!=0 ~ L1_dep_var/predictor,
+                                    is.na(lag(dep_var, n=1L)) & L1_dep_var==0 ~ NA),
+         pl2_spot_share = case_when(is.na(lag(dep_var, n=2L)) & L2_dep_var!=0 & predictor!=0 ~ L3_dep_var/predictor,
+                                    is.na(lag(dep_var, n=2L)) & L2_dep_var==0 ~ NA),
+         pl3_spot_share = case_when(is.na(lag(dep_var, n=3L)) & L3_dep_var!=0 & predictor!=0 ~ L3_dep_var/predictor,
+                                    is.na(lag(dep_var, n=3L)) & L3_dep_var==0 ~ NA),
+         pf1_spot_share = case_when(is.na(lead(dep_var, n=1L)) & F1_dep_var!=0 & predictor!=0 ~ F1_dep_var/predictor,
+                                    is.na(lead(dep_var, n=1L)) & F1_dep_var==0 ~ NA),
+         pf2_spot_share = case_when(is.na(lead(dep_var, n=2L)) & F2_dep_var!=0 & predictor!=0 ~ F2_dep_var/predictor,
+                                    is.na(lead(dep_var, n=2L)) & F2_dep_var==0 ~ NA),
+         pf3_spot_share = case_when(is.na(lead(dep_var, n=3L)) & F3_dep_var!=0 & predictor!=0 ~ F3_dep_var/predictor,
+                                    is.na(lead(dep_var, n=3L)) & F3_dep_var==0 ~ NA),
+         across(starts_with(c("pl","pf")), ~ mean(., na.rm=T)),
+         m_p_spot_share = case_when(!is.na(pl1_spot_share) ~ pl1_spot_share,
+                                    !is.na(pf1_spot_share) ~ pf1_spot_share,
+                                    !is.na(pl2_spot_share) ~ pl2_spot_share,
+                                    !is.na(pf2_spot_share) ~ pf2_spot_share,
+                                    !is.na(pl3_spot_share) ~ pl3_spot_share,
+                                    !is.na(pf3_spot_share) ~ pf3_spot_share)) %>%
+  ungroup() %>%
+  merge(.,merge, by=c("s_iso3c" ,"r_iso3c"), all.x = T) %>%
+  mutate(m_spot_share = case_when(is.na(m_spot_share) ~ atan(m_p_spot_share)*180/pi,
+                                  .default = m_spot_share),
+         across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
          across(starts_with("sd"), ~replace_na(.,90)),
          across(starts_with("m"), ~replace_na(.,45)),
          across(starts_with("n"), ~replace_na(.,0)),
@@ -221,28 +271,51 @@ modelling_set <- modelling_data %>% group_by(des_pair) %>%
                              across(starts_with("sd"), round,0),
                              across(starts_with("rsd"), round,1))
 # train final model
-final_mob <- mob(formula = formula, 
+final_mob <- lmtree(formula = formula, 
                  data=modelling_set,
-                 model = glinearModel,
                  na.action = na.pass,
-                 control = mob_control(alpha = best_tune$alpha,
-                                       minsplit = 20,
-                                       verbose = F))
+                 alpha = best_tune$alpha,
+                 prune = "AIC",
+                 minsplit = 20,
+                 verbose = F)
 
 #add features to prediction set 
 merge <- modelling_set %>% select(s_iso3c, r_iso3c, n_predictor, n_IIP, n_PI,  m_spot_share,m_IIP_share,
                                  m_PI_share, rsd_dep_var, sd_spot_share, sd_PI_share,sd_IIP_share,rsd_predictor) %>%
                               unique()
-prediction_set <- prediction_data %>% merge(.,merge, by=c("s_iso3c" ,"r_iso3c"), all.x = T) %>%
-                              mutate(across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
-                                     across(starts_with("sd"), ~replace_na(.,90)),
-                                     across(starts_with("m"), ~replace_na(.,45)),
-                                     across(starts_with("n"), ~replace_na(.,0)),
-                                     across(starts_with("rsd_"), ~replace_na(.,Inf)),
-                                     m_predictor = ntile(m_predictor, n=20)) %>%
-                              select(s_iso3c, r_iso3c, year, dep_var, predictor, IIP_inward, A_ti_T_T, mis_IIP, mis_PI,
-                                     n_predictor, n_IIP, n_PI, m_predictor, m_spot_share, m_IIP_share, m_PI_share,
-                                     rsd_dep_var, rsd_predictor, sd_spot_share, sd_PI_share, sd_IIP_share)
+prediction_set <- prediction_data %>% group_by(des_pair) %>%
+  mutate(pl1_spot_share = case_when(is.na(lag(dep_var, n=1L)) & L1_dep_var!=0 & predictor!=0 ~ L1_dep_var/predictor,
+                                    is.na(lag(dep_var, n=1L)) & L1_dep_var==0 ~ NA),
+         pl2_spot_share = case_when(is.na(lag(dep_var, n=2L)) & L2_dep_var!=0 & predictor!=0 ~ L3_dep_var/predictor,
+                                    is.na(lag(dep_var, n=2L)) & L2_dep_var==0 ~ NA),
+         pl3_spot_share = case_when(is.na(lag(dep_var, n=3L)) & L3_dep_var!=0 & predictor!=0 ~ L3_dep_var/predictor,
+                                    is.na(lag(dep_var, n=3L)) & L3_dep_var==0 ~ NA),
+         pf1_spot_share = case_when(is.na(lead(dep_var, n=1L)) & F1_dep_var!=0 & predictor!=0 ~ F1_dep_var/predictor,
+                                    is.na(lead(dep_var, n=1L)) & F1_dep_var==0 ~ NA),
+         pf2_spot_share = case_when(is.na(lead(dep_var, n=2L)) & F2_dep_var!=0 & predictor!=0 ~ F2_dep_var/predictor,
+                                    is.na(lead(dep_var, n=2L)) & F2_dep_var==0 ~ NA),
+         pf3_spot_share = case_when(is.na(lead(dep_var, n=3L)) & F3_dep_var!=0 & predictor!=0 ~ F3_dep_var/predictor,
+                                    is.na(lead(dep_var, n=3L)) & F3_dep_var==0 ~ NA),
+         across(starts_with(c("pl","pf")), ~ mean(., na.rm=T)),
+         m_p_spot_share = case_when(!is.na(pl1_spot_share) ~ pl1_spot_share,
+                                    !is.na(pf1_spot_share) ~ pf1_spot_share,
+                                    !is.na(pl2_spot_share) ~ pl2_spot_share,
+                                    !is.na(pf2_spot_share) ~ pf2_spot_share,
+                                    !is.na(pl3_spot_share) ~ pl3_spot_share,
+                                    !is.na(pf3_spot_share) ~ pf3_spot_share)) %>%
+  ungroup() %>%
+  merge(.,merge, by=c("s_iso3c" ,"r_iso3c"), all.x = T) %>%
+  mutate(m_spot_share = case_when(is.na(m_spot_share) ~ atan(m_p_spot_share)*180/pi,
+                                  .default = m_spot_share),
+         across(c("predictor", "A_ti_T_T", "IIP_inward"), ~replace_na(.,0)),
+         across(starts_with("sd"), ~replace_na(.,90)),
+         across(starts_with("m"), ~replace_na(.,45)),
+         across(starts_with("n"), ~replace_na(.,0)),
+         across(starts_with("rsd_"), ~replace_na(.,Inf)),
+         m_predictor = ntile(m_predictor, n=20)) %>%
+         select(s_iso3c, r_iso3c, year, dep_var, predictor, IIP_inward, A_ti_T_T, mis_IIP, mis_PI,
+         n_predictor, n_IIP, n_PI, m_predictor, m_spot_share, m_IIP_share, m_PI_share,
+         rsd_dep_var, rsd_predictor, sd_spot_share, sd_PI_share, sd_IIP_share)
                             
 # predict test data and save predictions
 if (i==1) {
