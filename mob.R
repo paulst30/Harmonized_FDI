@@ -322,11 +322,11 @@ if (i==1) {
 prediction_tdiff <- prediction_set %>% 
                                       mutate(prediction=predict(final_mob, newdata=prediction_set),
                                              target = target,
-                                             predictor = predictor)
+                                             run = i)
 } else {
 merge <- prediction_set %>% 
                       mutate(prediction=predict(final_mob, newdata=prediction_set),
                              target = target,
-                             predictor = predictor)
+                             run = i)
 prediction_tdiff <- rbind(prediction_tdiff, merge)
 }
