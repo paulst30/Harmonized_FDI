@@ -299,28 +299,25 @@ overview_prediction <- cbind(overview_prediction,overview_training)
 overview_prediction <- overview_prediction[,c("dep", "predictor", "training_sample", "prediction_sample")]
 
 
+############## Visualization of Model-Tree ###########################
 
-ultimate_data_sources <- ultimate_data_sources %>% select(des_pair, year, final_series) %>%
-                                 pivot_wider(names_from = year, values_from = final_series )
-col_order <- c( "des_pair", "2009", "2010", "2011",
-               "2012", "2013", "2014", "2015" ,"2016", "2017", "2018", "2019")
-ultimate_data_sources <- ultimate_data_sources[,  col_order]
-time_series <- as.matrix(ultimate_data_sources)
+# generate summary function for terminal nodes
+# mysummary <- function(info, digits = 2) {
+#   n <- info$nobs
+#   na <- format(names(coef(info$object)))
+#   cf <- format(coef(info$object), digits = digits)
+#   se <- format(sqrt(diag(vcov(info$object))), digits = digits)
+#   t <- format(coef(info$object)/sqrt(diag(vcov(info$object))) ,digits = digits)
+#   
+#   c(paste("n =", n),
+#     paste("Regressor","beta" ,"[", "t-ratio" ,"]"),
+#     paste(na, cf, "[",t,"]")
+#   )
+# }
+# 
+# plot(test, terminal_panel = node_terminal,
+#      tp_args = list(FUN = mysummary, fill = "white"),
+#      gp = gpar(fontfamily = "inconsolata"))
 
-ggplot(data = ultimate_data_sources, aes(y=des_pair, x=year,color=final_series)) + geom_point()
-
-##################infinity or overly large#####################################
-graph_inf_data <- working_data_wm %>%
-  select(IN_BMD4, OUT_BMD4, max_OUT_BMD4, diff_inBMD4_outBMD4) %>%
-  mutate( ratio= IN_BMD4/OUT_BMD4,
-    difficult =case_when(inrange(diff_inBMD4_outBMD4,-2,2) ~"easy",
-                              diff_inBMD4_outBMD4>2 ~"difficult",
-                              diff_inBMD4_outBMD4<(-2) ~"difficult"))
-         
-ggplot(data = graph_inf_data[graph_inf_data$ratio>5 | graph_inf_data$ratio<(.2),]) + geom_point(aes(x=OUT_BMD4*max_OUT_BMD4, y=IN_BMD4*max_OUT_BMD4 )) + 
-  coord_cartesian(xlim=c(-25000,300000), ylim =c(-25000,300000) )
-
-ggplot(data = working_data_wm) + geom_point(aes(x=OUT_BMD4, y=IN_BMD4 )) +  coord_cartesian(xlim=c(-2,2), ylim =c(-10,10) )
-
-
+plot(train_models[[1]], tp_args = list(yline=2,margins = c(1.5, 1.2, 1.5, 2.5)))
 

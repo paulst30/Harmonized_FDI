@@ -28,7 +28,7 @@
 #install.packages("fixest")
 
 
-
+extrafont::loadfonts(device="win")
 library(tidyverse)
 library(ggplot2)
 library(haven)

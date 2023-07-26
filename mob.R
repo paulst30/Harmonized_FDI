@@ -11,7 +11,7 @@ formula = as.formula("dep_var ~ predictor + A_ti_T_T  -1 |
 #create folds
 folds <- createFolds(train_data_tdiff$dep_var, k = 10, list = F)
 
-for (alpha in c(0.0005,0.001)){
+for (alpha in c(0.0005,0.01)){
   for (fold in 1:10) {
     #generate features on training data only
     print(paste0("run: ", i, "; fold: ", fold))
