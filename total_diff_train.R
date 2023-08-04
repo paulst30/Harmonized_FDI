@@ -131,6 +131,7 @@ prediction_train_tdiff <-data.frame(s_iso3c = dep_tdiff$s_iso3c,
                             year = dep_tdiff$year,
                             dep_var = dep_tdiff$dep_var,
                             predictor = dep_tdiff$predictor,
+                            const_share_pred = dep_tdiff$const_share_pred,
                             run = i
                             )
 } else {
@@ -139,6 +140,7 @@ prediction_train_tdiff <-data.frame(s_iso3c = dep_tdiff$s_iso3c,
                       year = dep_tdiff$year,
                       dep_var = dep_tdiff$dep_var,
                       predictor = dep_tdiff$predictor,
+                      const_share_pred = dep_tdiff$const_share_pred,
                       run = i
   )
 }
@@ -195,6 +197,30 @@ prediction_test_tdiff <- data.frame(boost = predict(boost_tdiff_cv, newdata =  x
 #save performance
 prediction_summary_tdiff[i,]<- c(getTrainPerf(boost_tdiff_cv), prediction_test_tdiff)
 
+#Performance manual
+if (i == 1) {
+  test_tdiff <- data.frame(s_iso3c = dep_test_tdiff$s_iso3c,
+                                 r_iso3c = dep_test_tdiff$r_iso3c,
+                                 year = dep_test_tdiff$year,
+                                 boost = predict(boost_tdiff_cv, newdata =  xgb_test_tdiff_sp),
+                                 dep_var = dep_test_tdiff$dep_var,
+                                 predictor = dep_test_tdiff$predictor,
+                                 target = paste(target),
+                                 predictor_name=paste(predictor),
+                                 const_share_pred = dep_test_tdiff$const_share_pred)
+} else {
+  merge <- data.frame(s_iso3c = dep_test_tdiff$s_iso3c,
+                      r_iso3c = dep_test_tdiff$r_iso3c,
+                      year = dep_test_tdiff$year,
+                      boost = predict(boost_tdiff_cv, newdata =  xgb_test_tdiff_sp),
+                      dep_var = dep_test_tdiff$dep_var,
+                      predictor = dep_test_tdiff$predictor,
+                      target = paste(target),
+                      predictor_name = paste(predictor),
+                      const_share_pred = dep_test_tdiff$const_share_pred)
+  test_tdiff <- rbind(test_tdiff, merge)
+}
+
 
 #quintile performance
 quin_perf_tdiff <- prediction_train_tdiff %>% 
@@ -229,15 +255,21 @@ if (i == 1) {
                                     r_iso3c = dep_pred_tdiff$r_iso3c,
                                     year = dep_pred_tdiff$year,
                                     boost = predict(boost_tdiff_cv, newdata =  xgb_pred_tdiff_sp),
+                                    dep_var = dep_pred_tdiff$dep_var,
+                                    predictor = dep_pred_tdiff$predictor,
                                     target = paste(target),
-                                predictor=paste(predictor))
+                                predictor_name=paste(predictor),
+                                const_share_pred = dep_pred_tdiff$const_share_pred)
 } else {
   merge <- data.frame(s_iso3c = dep_pred_tdiff$s_iso3c,
                       r_iso3c = dep_pred_tdiff$r_iso3c,
                       year = dep_pred_tdiff$year,
                       boost = predict(boost_tdiff_cv, newdata =  xgb_pred_tdiff_sp),
+                      dep_var = dep_pred_tdiff$dep_var,
+                      predictor = dep_pred_tdiff$predictor,
                       target = paste(target),
-                      predictor = paste(predictor))
+                      predictor_name = paste(predictor),
+                      const_share_pred = dep_pred_tdiff$const_share_pred)
   prediction_tdiff <- rbind(prediction_tdiff, merge)
 }
 
