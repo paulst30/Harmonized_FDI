@@ -47,7 +47,6 @@ rm(list=setdiff(ls(), c("quin_perfs",               #...decile performance
                         "besttune",                 #...best tunes
                         "graphs",                   #...graphs
                         "prediction_summary_tdiff", #...performance metrics
-                        "coverage_all",             #...variable coverage
                         "prediction_tasks",         #...summary of prediction tasks
                         "test_tdiff",               #...test set
                         "prediction_train_tdiff",   #...prediction on the training set
