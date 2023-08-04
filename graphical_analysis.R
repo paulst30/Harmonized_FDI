@@ -1,4 +1,4 @@
-######### Introduction graph ##########
+#### Introduction graph #####
 
 world_graph_data <- select(data, OECD_IN_BMD4, OECD_IN_BMD3, OECD_OUT_BMD4, OECD_OUT_BMD3, year, des_pair) %>%
   group_by(des_pair) %>%
@@ -43,25 +43,19 @@ world_graph$OUT_BMD4[world_graph$year<2013]<-NA
 
 
 world_graph  %>% pivot_longer(!year,  names_to = "vintage", values_to = "FDI") %>%
+  mutate(vintage=gsub("_", " ", vintage)) %>%
   ggplot() + 
   geom_line(mapping = aes(x=year, y=FDI, linetype = vintage), linewidth=1 ) +
   geom_vline(xintercept=2012.5) +
   annotate("text",x=2013 ,y=Inf ,label="BMD4", vjust="inward", hjust="outward") +
   annotate("text",x=2012 ,y=Inf ,label="BMD3", vjust="inward", hjust="inward") +
-  labs(x="Year", y="FDI")
+  labs(x="Year", y="FDI") 
 
 #Note: Aggregate FDI stock of 845 country pairs by vintage. Sample only includes country pairs that have non-missing observations in all vintages.
 #Source: OECD FDI statistics. 
 
-transition %>% pivot_longer(!year,  names_to = "vintage", values_to = "FDI") %>% 
-  ggplot() + 
-  geom_line(mapping = aes(x=year, y=FDI, linetype = vintage), linewidth=1 ) +
-  geom_vline(xintercept=2012.5) +
-  annotate("text",x=2013 ,y=Inf ,label="BMD4", vjust="inward", hjust="outward") +
-  annotate("text",x=2012 ,y=Inf ,label="BMD3", vjust="inward", hjust="inward") +
-  labs(x="Year", y="FDI")
 
-################# scatter plots chapter 1 #####################################
+##### comparison of different vintages #####
 graph_data_comparison <- data %>% mutate(SPE_ind=ifelse(s_iso3c=="LUX" | s_iso3c=="NLD" |
                                                           s_iso3c=="BEL" | s_iso3c=="HUN" |
                                                           r_iso3c=="LUX" | r_iso3c=="HUN" |
@@ -91,36 +85,37 @@ sum_comp_OUT <- graph_data_comparison %>% summarize(n=sum(!is.na(OUT_BMD4) & !is
   select(label, position)
 
 graph_BMD4 <- ggplot(data = graph_data_comparison) + 
-  geom_point(data = graph_data_comparison[graph_data_comparison$fin_center==1,], aes(x=OUT_BMD4, y=IN_BMD4), colour="orange2") +
+  geom_point(data = graph_data_comparison[graph_data_comparison$fin_center==1,], aes(x=OUT_BMD4, y=IN_BMD4), shape=6) +
   geom_point(data = graph_data_comparison[graph_data_comparison$fin_center!=1,], aes(x=OUT_BMD4, y=IN_BMD4)) +
-  labs(x="Outward (BMD4)", y="Inward (BMD4)") +
+  labs(x="OUT BMD4", y="IN BMD4") +
   coord_cartesian(xlim=c(-50000,1000000), ylim =c(-50000,1500000)) +
   geom_text(data=sum_BMD4, aes(x=position, label=label), y=1480000,hjust = 0 , size=3)
 
-graph_BMD3 <- ggplot(data = graph_data_comparison) + geom_jitter(aes(x=OECD_OUT_BMD3, y=OECD_IN_BMD3)) +
-  geom_point(data = graph_data_comparison[graph_data_comparison$fin_center==1,], aes(x=OECD_OUT_BMD3, y=OECD_IN_BMD3), colour="orange2") +
+graph_BMD3 <- ggplot(data = graph_data_comparison) + 
+  geom_point(data = graph_data_comparison[graph_data_comparison$fin_center==1,], aes(x=OECD_OUT_BMD3, y=OECD_IN_BMD3), shape=6) +
   geom_point(data = graph_data_comparison[graph_data_comparison$fin_center!=1,], aes(x=OECD_OUT_BMD3, y=OECD_IN_BMD3)) +
-  labs(x="Outward (BMD3)", y="Inward (BMD3)") +
+  labs(x="OUT BMD3", y="IN BMD3") +
   coord_cartesian(xlim=c(-50000,1000000), ylim =c(-50000,1500000)) +
   geom_text(data=sum_BMD3, aes(x=position, label=label), y=1480000,hjust = 0, size=3)
 
 
 graph_comparison_IN <- ggplot(data = graph_data_comparison) +
-  geom_point(aes(y=IN_BMD4, x=OECD_IN_BMD3)) +
-  geom_text(aes(label="LUX"),y=500000,x=-10000,colour="orange2", size=3)+
-  geom_text(aes(label="NLD"),y=650000,x=170000,colour="orangered2", size=3)+
-  geom_point(data= graph_data_comparison[graph_data_comparison$r_iso3c=="LUX",], aes(y=IN_BMD4, x=OECD_IN_BMD3), colour="orange2") + 
-  geom_point(data= graph_data_comparison[graph_data_comparison$r_iso3c=="NLD",], aes(y=IN_BMD4, x=OECD_IN_BMD3), colour="orangered2") +
-  labs(x="Inward (BMD3)", y="Inward (BMD4)") +
+  geom_point(data = graph_data_comparison[graph_data_comparison$r_iso3c!="LUX" & graph_data_comparison$r_iso3c!="NLD",], aes(y=IN_BMD4, x=OECD_IN_BMD3)) +
+  geom_text(aes(label="LUX"),y=500000,x=-10000, size=3)+
+  geom_text(aes(label="NLD"),y=650000,x=170000, size=3)+
+  geom_point(data= graph_data_comparison[graph_data_comparison$r_iso3c=="LUX",], aes(y=IN_BMD4, x=OECD_IN_BMD3), shape=6) + 
+  geom_point(data= graph_data_comparison[graph_data_comparison$r_iso3c=="NLD",], aes(y=IN_BMD4, x=OECD_IN_BMD3), shape=7) +
+  labs(x="IN BMD3", y="IN BMD4") +
   coord_cartesian(xlim=c(-50000,1000000), ylim =c(-50000,1000000)) +
   geom_text(data=sum_comp_IN, aes(x=position, label=label), y=980000,hjust = 0, size=3)
 
-graph_comparison_OUT <- ggplot(data = graph_data_comparison) + geom_point(aes(y=OUT_BMD4, x=OECD_OUT_BMD3))  + 
-  geom_text(aes(label="LUX"),y=575000,x=-30000,colour="orange2", size=3)+
-  geom_text(aes(label="NLD"),y=670000,x=160000,colour="orangered2", size=3)+
-  geom_point(data= graph_data_comparison[graph_data_comparison$s_iso3c=="LUX",], aes(y=OUT_BMD4, x=OECD_OUT_BMD3), colour="orange2") + 
-  geom_point(data= graph_data_comparison[graph_data_comparison$s_iso3c=="NLD",], aes(y=OUT_BMD4, x=OECD_OUT_BMD3), colour="orangered2") +
-  labs(x="Outward (BMD3)", y="Outward (BMD4)") +
+graph_comparison_OUT <- ggplot() + 
+  geom_point(data = graph_data_comparison[graph_data_comparison$s_iso3c!="LUX" & graph_data_comparison$s_iso3c!="NLD",], aes(y=OUT_BMD4, x=OECD_OUT_BMD3))  + 
+  geom_text(aes(label="LUX"),y=575000,x=-30000, size=3)+
+  geom_text(aes(label="NLD"),y=670000,x=160000, size=3)+
+  geom_point(data= graph_data_comparison[graph_data_comparison$s_iso3c=="LUX",], aes(y=OUT_BMD4, x=OECD_OUT_BMD3), shape=6) + 
+  geom_point(data= graph_data_comparison[graph_data_comparison$s_iso3c=="NLD",], aes(y=OUT_BMD4, x=OECD_OUT_BMD3), shape=7) +
+  labs(x="OUT BMD3", y="OUT BMD4") +
   coord_cartesian(xlim=c(-50000,1000000), ylim =c(-50000,1000000)) +
   geom_text(data=sum_comp_OUT, aes(x=position, label=label), y=980000,hjust = 0, size=3)
 
@@ -128,7 +123,7 @@ graph_comparison_OUT <- ggplot(data = graph_data_comparison) + geom_point(aes(y=
 plot_grid(graph_BMD4, graph_BMD3,graph_comparison_IN,graph_comparison_OUT,  nrow = 2, labels = c('A', 'B', 'C', 'D'), align="hv")
 
 
-################# visualization of finflows technique ########################
+##### visualization of finflows technique #####
 #example is based on harmonizing IN BMD4 with OUT BMD4
 finflow_example <- data %>% select(r_iso3c, s_iso3c, year, IN_BMD4, OUT_BMD4, IIP_inward) %>%
                             filter(!is.na(IN_BMD4) & !is.na(OUT_BMD4)) %>%
@@ -174,12 +169,7 @@ finflow_metrics <- finflow_metrics %>% group_by(r_iso3c, s_iso3c, year) %>%
                    summarize(across(c("IN_BMD4", "OUT_BMD4", "prediction"), ~ mean(.x, na.rm=T)))
 
 
-#finflow_metrics %>% summarize(MAE_naive = mean(V1), MAE_growth = mean(V2))
-# excluding nothing leads to an 
-# excluding any shares above 2 leads to improvement of 38 percent of the absolute error
-
-######################### plotting ######################################
-
+#plot finflows
 plot1 <- ggplot(data=finflow_metrics, aes(y=IN_BMD4,x=OUT_BMD4)) + geom_point() +
                 labs(x="OUT BMD4",y="IN BMD4") + coord_cartesian(xlim=c(-500000,2000000))
 plot2 <- ggplot(data=finflow_metrics, aes(y=IN_BMD4,x=prediction)) + geom_point() +
@@ -268,56 +258,8 @@ overview_series <- ultimate_data_sources %>% mutate(sum = sum(no_IN_BMD4, no_OUT
                                                        share = round(observations/sum, digits=2))
 write.csv(overview_series, row.names = F) #output for the paper
 
-overview_prediction_INB3 <- ultimate_data_sources[ultimate_data_sources$no_IN_BMD3!=0,] %>% 
-                              summarize(prIN_BMD4 = sum(no_IN_BMD4),
-                                        prOUT_BMD4 = sum(no_OUT_BMD4),
-                                        prOECD_OUT_BMD3 = sum(no_OUT_BMD3))
-overview_prediction_OUB3 <- ultimate_data_sources[ultimate_data_sources$no_IN_BMD3==0 & ultimate_data_sources$no_OUT_BMD3!=0,] %>% 
-                             summarize(prIN_BMD4 = sum(no_IN_BMD4),
-                                       prOUT_BMD4 = sum(no_OUT_BMD4),
-                                       prOECD_OUT_BMD3 = 0)
-overview_prediction_INB4 <- ultimate_data_sources[ultimate_data_sources$no_IN_BMD4!=0 & ultimate_data_sources$no_IN_BMD3==0 & ultimate_data_sources$no_OUT_BMD3==0,] %>% 
-                             summarize(prIN_BMD4 = 0,
-                                       prOUT_BMD4 = sum(no_OUT_BMD4),
-                                       prOECD_OUT_BMD3 = 0)
 
-overview_prediction <- rbind(overview_prediction_INB3, overview_prediction_OUB3, overview_prediction_INB4)
-overview_prediction$dep <- c("OECD_IN_BMD3", "OECD_OUT_BMD3", "IN_BMD4")
-
-#prediction sample
-overview_prediction <- pivot_longer(overview_prediction,cols=starts_with("pr"),
-                                    names_prefix = "pr",
-                                    names_to = "predictor", values_to = "prediction_sample" ) %>%
-                                    filter(prediction_sample>0)
-#training sample
-overview_training <- matrix(nrow=6,ncol=1) %>% as.data.frame() 
-for (i in 1:6) {
-  overview_training[i,] <- sum(!is.na(data[,overview_prediction$dep[i]]) & !is.na(data[, overview_prediction$predictor[i]]))
-}
-colnames(overview_training) <- "training_sample" 
-overview_prediction <- cbind(overview_prediction,overview_training)
-overview_prediction <- overview_prediction[,c("dep", "predictor", "training_sample", "prediction_sample")]
-
-
-############## Visualization of Model-Tree ###########################
-
-# generate summary function for terminal nodes
-# mysummary <- function(info, digits = 2) {
-#   n <- info$nobs
-#   na <- format(names(coef(info$object)))
-#   cf <- format(coef(info$object), digits = digits)
-#   se <- format(sqrt(diag(vcov(info$object))), digits = digits)
-#   t <- format(coef(info$object)/sqrt(diag(vcov(info$object))) ,digits = digits)
-#   
-#   c(paste("n =", n),
-#     paste("Regressor","beta" ,"[", "t-ratio" ,"]"),
-#     paste(na, cf, "[",t,"]")
-#   )
-# }
-# 
-# plot(test, terminal_panel = node_terminal,
-#      tp_args = list(FUN = mysummary, fill = "white"),
-#      gp = gpar(fontfamily = "inconsolata"))
+#### visualization of MOBs #####
 
 plot(train_models[[1]], tp_args = list(yline=2,margins = c(1.5, 1.2, 1.5, 2.5)))
 

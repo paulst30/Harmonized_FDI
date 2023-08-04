@@ -1,34 +1,4 @@
-#Setup 
-#install.packages("tidyverse")
-#install.packages("ggplot2")
-#install.packages("haven")
-#install.packages("rpart")
-#install.packages("rpart.plot")
-#install.packages("caret")
-#install.packages("expss")
-#install.packages("randomForest")
-#install.packages("gbm")
-#install.packages("randomForestSRC")
-#install.packages("missForest")
-#install.packages("foreign")
-#install.packages("mlbench")
-#install.packages("xtable")
-#install.packages("xgboost")
-#install.packages("Matrix")
-#install.packages("cowplot")
-#install.packages("FactoMineR")
-#install.packages("car")
-#install.packages("glmnet")
-#install.packages("RANN")
-#install.packages("diversityForest")
-#install.packages("stringr")
-#install.packages("MatchIt")
-#install.packages("doBy")
-#install.packages("neuralnet")
-#install.packages("fixest")
-
-
-extrafont::loadfonts(device="win")
+#### load required packages into the library #### 
 library(tidyverse)
 library(ggplot2)
 library(haven)
@@ -38,14 +8,8 @@ library(rpart.plot)
 library(lattice)
 library(caret)
 library(expss)
-library(randomForest)
-library(gbm)
-library(randomForestSRC)
-library(missForest)
-library(leaps)
 library(mlbench)
 library(xtable)
-library(xgboost)
 library(Matrix)
 library(cowplot)
 library(corrplot)
@@ -53,44 +17,46 @@ library(FactoMineR)
 library(car)
 library(glmnet)
 library(RANN)
-library(diversityForest)
 library(stringr)
 library(MatchIt)
 library(doBy)
-library(neuralnet)
 library(fixest)
 library(partykit)
 
-
-quin_perfs <- list()
-besttune <- list()
-coverage_all <- list()
-graphs <- list()
-prediction_summary_tdiff <- matrix(nrow = 6, ncol=6) %>% as.data.frame()
+#### define output to be saved during estimation loops ####
+quin_perfs <- list()        #place to store decile performance tables
+besttune <- list()          #place to store best tunes
+coverage_all <- list()      #place to store coverage of variables
+graphs <- list()            #place to store graphs
+train_models <- list()      #place to store the final best tuned model   
+prediction_summary_tdiff <- matrix(nrow = 6, ncol=6) %>%  #place to store performance measures
+                            as.data.frame() 
 colnames(prediction_summary_tdiff) <- c("TrainRMSE", "TrainR2", "TrainMAE" , "TestRMSE", "TestR2", "TestMAE")
-prediction_tasks <- matrix(nrow=6, ncol=5)
-train_models <- list()
+prediction_tasks <- matrix(nrow=6, ncol=5) #place to store prediction tasks and descriptives
 
+#### load in the data ####
 source("data.R")
+
+#### loop over setup and estimation scripts by prediction tasks ####
 for (i in 1:6) {
-source("Setup.R")
-source("mob.R")
-rm(list=setdiff(ls(), c("quin_perfs", 
-                        "besttune", 
-                        "graphs", 
-                        "prediction_summary_tdiff", 
-                        "coverage_all", 
-                        "prediction_tdiff", 
-                        "prediction_tasks", 
-                        "test_tdiff",
-                        "prediction_train_tdiff",
-                        "prediction_test_tdiff",
-                        "prediction_tdiff",
-                        "predictor_matrix",
-                        "train_models",
-                        "data"))) 
+source("Setup.R")   #defines predictor and target vintage, builds features, defines training and testing sets
+source("mob.R")     #fits MOB on training set and evaluates performance; uses best model to predict the prediction set
+
+#clear memory but keep track of ...
+rm(list=setdiff(ls(), c("quin_perfs",               #...decile performance
+                        "besttune",                 #...best tunes
+                        "graphs",                   #...graphs
+                        "prediction_summary_tdiff", #...performance metrics
+                        "coverage_all",             #...variable coverage
+                        "prediction_tasks",         #...summary of prediction tasks
+                        "test_tdiff",               #...test set
+                        "prediction_train_tdiff",   #...prediction on the training set
+                        "prediction_test_tdiff",    #...prediction on the test set
+                        "prediction_tdiff",         #...prediction on the prediction set
+                        "predictor_matrix",         #...table that defines prediction tasks
+                        "train_models",             #...ultimate models
+                        "data")))                   #...data set
 }
 
-source("results.R")
-source("practical_test.R")
-source("fellow_diff_train.R")
+source("results.R")               #clean up the results and generate output for the paper
+source("practical_test.R")        #generate the harmonized dataset and run practical tests

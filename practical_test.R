@@ -1,18 +1,17 @@
+#### combine data with predicted observations #####
 data <- read_dta('quality_analysis_ml_data.dta')
-#combine data with predicted observations
 
-# check for duplicates 
+#check for duplicates (some observations could be predicted by multiple predictor vintages)
 prediction_tdiff %>% group_by(s_iso3c, r_iso3c, year) %>%
                      mutate(new=n()>1) %>% filter(new==1) %>% arrange(s_iso3c,r_iso3c,year)
 prediction_obs <- prediction_tdiff %>% distinct(s_iso3c, r_iso3c, year , .keep_all = TRUE) #delete duplicates
 
 
-#predictor var muss mit getrackt werden
-
+#isolate US deflator
 deflator <- data %>% filter(r_iso3c=="USA") %>% select(year, r_GDPdef) %>% group_by(year) %>% 
                      summarize(deflator_USD=mean(r_GDPdef))
 
-#merging data 
+### merge predictions to data ###
 practical_test_data <- data %>% merge(.,prediction_obs, by = c("s_iso3c", "r_iso3c","year"), all.x=T, all.y = T) %>% 
                                 merge(., deflator, by= "year", all.x=T) %>%
                                 select(s_iso3c, r_iso3c, year, des_pair,
@@ -48,42 +47,34 @@ practical_test_data <- data %>% merge(.,prediction_obs, by = c("s_iso3c", "r_iso
                                         diff_GDPcap = s_GDPpercap - r_GDPpercap
                                         ) %>%
                                         group_by(pair) %>%
-                                        fill(c("target","run"), .direction = "downup")
-                                        #filter(fin_center==0)
+                                        fill(c("target","run"), .direction = "downup") %>%
+                                        group_by(sender, year) %>%
+                                        mutate(s_sum_BIT = sum(BIT, na.rm=T)) %>%
+                                        group_by(receiver , year) %>%
+                                        mutate(r_sum_BIT = sum( BIT, na.rm = T ))
 
 
-
-
-#########plausibility check#####################
+#### plausibility check #####
 practical_test_data[practical_test_data$fin_center==0 & practical_test_data$target=="OECD_IN_BMD3" ,] %>% group_by(year) %>% 
                summarize(mean_normal=mean(IN_BMD4), mean_adjusted=mean(adjusted), mean_naive=mean(naive), sum_BIT=sum(BIT)) %>% 
                ggplot() + geom_line(aes(y=mean_naive, x=year)) + geom_line(aes(y=mean_adjusted, x=year, color="adjusted")) + 
                geom_line(aes(y=mean_normal, x=year, color="normal"))
 
 
-#########practical research test################
-
-#comparing sample of just BMD3 in/outflows
-IN_BMD3_comp <- filter(practical_test_data, (!is.na(OECD_IN_BMD3) |  !is.na(IN_BMD4)) & target=="OECD_IN_BMD3" & fin_center==0)
-IN_BMD3_comp <- filter(practical_test_data, (!is.na(OECD_IN_BMD3) |  !is.na(OECD_OUT_BMD3)) & target=="OECD_IN_BMD3" & fin_center==0)
-
-IN_BMD3_comparison <- feols(fml = c(t_naive ,t_adjusted) ~ BIT + PTA + DTT  | pair + receiver^year + sender^year, 
-                            data = IN_BMD3_comp)
-etable(IN_BMD3_comparison)
-IN_BMD3_comp %>% group_by(year) %>% summarize(naive=sum(naive, na.rm=T), adjusted=sum(adjusted, na.rm=T)) %>% ggplot() + geom_line(aes(x=year, y=naive)) + geom_line(aes(x=year, y=adjusted, color="adjusted"))
+#### practical research test #####
 
 # whole sample comparison
 simple_model <- feols(fml = c(t_naive ,t_adjusted) ~ BIT + PTA + DTT   | pair + receiver^year + sender^year, 
                       data = practical_test_data)
 
 simple_model_r <- feols(fml = c(t_naive ,t_adjusted) ~ BIT + PTA + DTT +
-                              r_GDPcurr + r_Trade + r_GDPpercap  
+                              r_sum_BIT + r_GDPcurr + r_Trade + r_GDPpercap  
                               | pair + receiver + sender^year + year, 
                         data = practical_test_data)
 
 simple_model_rs <- feols(fml = c(t_naive ,t_adjusted) ~ BIT + PTA + DTT  +
-                          r_GDPcurr + r_Trade + r_GDPpercap +
-                          s_GDPcurr + s_Trade + s_GDPpercap
+                           r_sum_BIT + r_GDPcurr + r_Trade + r_GDPpercap +
+                           s_sum_BIT + s_GDPcurr + s_Trade + s_GDPpercap
                         | pair + receiver + sender + year, 
                         data = practical_test_data)
 
