@@ -11,7 +11,30 @@ prediction_obs <- prediction_tdiff %>% distinct(s_iso3c, r_iso3c, year , .keep_a
 deflator <- data %>% filter(r_iso3c=="USA") %>% select(year, r_GDPdef) %>% group_by(year) %>% 
                      summarize(deflator_USD=mean(r_GDPdef))
 
-### merge predictions to data ###
+### generate harmonized dataset ###
+harmonized_data <- data %>% merge(.,prediction_obs, by = c("s_iso3c", "r_iso3c","year"), all.x=T, all.y = T) %>% 
+                            mutate(naive_FDI = case_when(!is.na(OECD_IN_BMD3) ~ OECD_IN_BMD3,
+                                                     is.na(OECD_IN_BMD3) & !is.na(OECD_OUT_BMD3) ~ OECD_OUT_BMD3,
+                                                     is.na(OECD_IN_BMD3) & is.na(OECD_OUT_BMD3) & !is.na(IN_BMD4) ~ IN_BMD4,
+                                                     is.na(IN_BMD4) & is.na(OECD_IN_BMD3) & is.na(OECD_OUT_BMD3) & !is.na(OUT_BMD4) ~ OUT_BMD4),
+                                   naive_vintage =  case_when(!is.na(OECD_IN_BMD3) ~ "OECD_IN_BMD3",
+                                                               is.na(OECD_IN_BMD3) & !is.na(OECD_OUT_BMD3) ~ "OECD_OUT_BMD3",
+                                                               is.na(OECD_IN_BMD3) & is.na(OECD_OUT_BMD3) & !is.na(IN_BMD4) ~ "IN_BMD4",
+                                                               is.na(IN_BMD4) & is.na(OECD_IN_BMD3) & is.na(OECD_OUT_BMD3) & !is.na(OUT_BMD4) ~ "OUT_BMD4"),
+                                   harmonized_FDI = case_when(!is.na(naive_FDI) & is.na(prediction) ~ naive_FDI,
+                                                              !is.na(naive_FDI) & !is.na(prediction) ~ prediction),
+                                   harmonized_vintage = case_when(!is.na(naive_FDI) & is.na(prediction) ~ naive_vintage,
+                                                                  !is.na(naive_FDI) & !is.na(prediction) ~ target),
+                                   adjusted = case_when(!is.na(prediction) ~ 1,
+                                                        is.na(prediction) ~ 0)) %>%
+                                   select(s_iso3c, r_iso3c, year, 
+                                          IN_BMD4, OUT_BMD4, OECD_IN_BMD3, OECD_OUT_BMD3, 
+                                          naive_FDI, naive_vintage, harmonized_FDI, harmonized_vintage, adjusted) %>%
+                                   filter(!is.na(IN_BMD4)| !is.na(OUT_BMD4) | !is.na(OECD_IN_BMD3) | !is.na(OECD_OUT_BMD3))
+#save harmonized FDI data set
+write.csv(harmonized_data, paste(getwd(),"harmonized data.csv",sep="/"), row.names=FALSE)
+
+### build data set for practical tests
 practical_test_data <- data %>% merge(.,prediction_obs, by = c("s_iso3c", "r_iso3c","year"), all.x=T, all.y = T) %>% 
                                 merge(., deflator, by= "year", all.x=T) %>%
                                 select(s_iso3c, r_iso3c, year, des_pair,
