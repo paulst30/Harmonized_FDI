@@ -2,7 +2,7 @@
 In this project, a harmonized FDI data series is estimated by adjusting for methodological changes. FDI data of different vintages are combined to one large FDI dataset. 
 
 ## Data
-The data set needed to execute all scripts can be downloaded [here](https://drive.google.com/drive/folders/1aWDlLN6OIaNCg84fvqO13VB6rTD_iHHs?usp=sharing). 
+The data set needed to execute all scripts and the final harmonized data set can be downloaded [here](https://drive.google.com/drive/folders/1aWDlLN6OIaNCg84fvqO13VB6rTD_iHHs?usp=sharing).  
 
 ## Scripts
 `MASTER.R` runs all scripts and produces the output presented in the paper. In the process, the harmonized FDI data set is saved as csv-file under the current working directory. The following scripts are executed within `MASTER.R`:
