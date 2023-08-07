@@ -1,8 +1,6 @@
-#### read in Stata data ####
-data1 <- read_dta('quality_analysis_ml_data.dta') 
-data <- as.data.frame(do.call(cbind, data1))
-data1 <- NULL
-data[,-c(1,2,8)] <- data[,-c(1,2,8)] %>% mutate(across(everything(), as.numeric))
+#### read in data ####
+data <- read.csv('quality_analysis_ml_data.csv')
+
 
 #### generate combination matrix for different algorithms ####
 predictor_matrix <- data.frame(dep_var= c("OECD_IN_BMD3", "OECD_IN_BMD3", "OECD_IN_BMD3", "OECD_OUT_BMD3", "OECD_OUT_BMD3", "IN_BMD4"),
