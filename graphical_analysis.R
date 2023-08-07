@@ -181,38 +181,8 @@ plot_grid(plot1,plot2,ncol = 2,
 
 
 
-###########data coverage for ML-sample########################################## 
-#visualizations
-count <- data %>% filter(s_iso3c!="" & r_iso3c!="" & s_iso3c!="unalloc") %>%
-  group_by(s_iso3c, r_iso3c) %>% 
-  summarise(IN=sum(!is.na(IN_BMD4)), OUT=sum(!is.na(OUT_BMD4)), 
-            r_GDPpc=mean(r_GDPcurr/r_pop), s_GDPpc=mean(s_GDPcurr/r_pop)) %>% 
-  arrange(desc(s_GDPpc),desc(r_GDPpc)) %>% 
-  select(s_iso3c, r_iso3c, IN) %>%
-  pivot_wider(names_from = r_iso3c, values_from = IN)
-count2 <- count[,count$s_iso3c] %>% as.matrix()
-rownames(count2) <- count$s_iso3c
 
-
-heatmap(count2,Rowv = NA,Colv = NA, labRow = "",labCol = "", xlab="receiver", ylab="sender", 
-        main="Inward Stocks", margins = c(2,2) )
-
-
-count <- data %>% filter(s_iso3c!="" & r_iso3c!="" & s_iso3c!="unalloc") %>%
-  group_by(s_iso3c, r_iso3c) %>% 
-  summarise(IN=sum(!is.na(IN_BMD4)), OUT=sum(!is.na(OUT_BMD4)), 
-            r_GDPpc=mean(r_GDPcurr/r_pop), s_GDPpc=mean(s_GDPcurr/r_pop)) %>% 
-  arrange(desc(s_GDPpc),desc(r_GDPpc)) %>% 
-  select(s_iso3c, r_iso3c, OUT) %>%
-  pivot_wider(names_from = r_iso3c, values_from = OUT)
-count2 <- count[,count$s_iso3c] %>% as.matrix()
-rownames(count2) <- count$s_iso3c
-
-
-heatmap(count2,Rowv = NA,Colv = NA, labRow = "",labCol = "", xlab="receiver", ylab="sender", 
-        main="Outward Stocks" ,margins = c(2,2))
-
-############### heatmap for ultimate sample ###################################
+############### overview series ###################################
 #data <- read_dta('quality_analysis_ml_data.dta')
 
 ultimate_data_sources <- data %>% select(s_iso3c, r_iso3c, year,des_pair , OUT_BMD4, IN_BMD4, OECD_IN_BMD3, OECD_OUT_BMD3) %>%
