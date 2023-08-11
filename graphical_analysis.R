@@ -166,7 +166,11 @@ finflow_metrics <- finflow_example %>% group_by(r_iso3c, s_iso3c) %>%
   }
 }
 finflow_metrics <- finflow_metrics %>% group_by(r_iso3c, s_iso3c, year) %>%
-                   summarize(across(c("IN_BMD4", "OUT_BMD4", "prediction"), ~ mean(.x, na.rm=T)))
+                   summarize(across(c("IN_BMD4", "OUT_BMD4", "prediction"), ~ mean(.x, na.rm=T))) %>%
+                   group_by(s_iso3c, r_iso3c) %>%
+                   mutate(growth_rate=(prediction-lag(prediction, n=1L))/lag(prediction,n=1L),
+                          ind_growth=case_when(growth_rate>1 | growth_rate<(-1) ~1,
+                                               .default = 0))
 
 
 #plot finflows
