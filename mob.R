@@ -1,6 +1,6 @@
-
+#+ A_ti_T_T
 #### define formula for the linear regression in the terminal nodes ###
-formula = as.formula("dep_var ~ predictor + A_ti_T_T  -1 |
+formula = as.formula("dep_var ~ predictor   -1 |
                                              mis_IIP + mis_PI +
                                              sd_spot_share +  sd_PI_share + 
                                              m_spot_share + n_predictor + m_PI_share + m_predictor + n_PI")

@@ -190,7 +190,7 @@ simple_model_r <- feols(fml = c(t_naive ,t_adjusted) ~ BIT + PTA + DTT +
 
 simple_model_rs <- feols(fml = c(t_naive ,t_adjusted) ~ BIT + PTA + DTT  +
                            r_GDPcurr + r_Trade + r_GDPpercap +
-                           s_sum_BIT + s_GDPcurr + s_Trade + s_GDPpercap
+                           s_GDPcurr + s_Trade + s_GDPpercap
                         | pair + receiver + sender + year, 
                         data = practical_test_data)
 
@@ -198,3 +198,44 @@ write.csv(etable(simple_model, simple_model_r, simple_model_rs,
                  headers = rep(c("Case 1", "Case 2", "Case 3"), each=2),
                  style.df = style.df(fixef.title = "",
                              fixef.suffix = " fixed effect", yesNo = "yes")))
+
+#### Effect on DTT ####
+simple_model_test <- feols(fml = t_naive ~ BIT + PTA + DTT +
+                             r_GDPcurr + r_Trade + r_GDPpercap  
+                           | pair + receiver + sender^year + year, 
+                           data = practical_test_data)
+
+# isolate scores for the observations
+n_scores <- simple_model_r$`lhs: t_naive`$scores[,3]
+a_scores <- simple_model_r$`lhs: t_adjusted`$scores[,3]
+
+cooks_data <- data.frame(practical_test_data[simple_model_test$obs_selection$obsRemoved,], n_scores=n_scores, a_scores=a_scores) %>%
+              mutate(change=a_scores-n_scores)
+
+# percentiles for change
+ecdf_change <- ecdf(cooks_data$change)
+ecdf_change(-1)
+
+# identify the 50 highest impact pairs
+high_impact_50 <- cooks_data %>% arrange(desc(-change)) %>% distinct(pair) %>% head(n=50)
+
+#test run excluding highest influential pairs
+feols(fml = c(t_naive ,t_adjusted) ~ BIT + PTA + DTT  +
+        r_GDPcurr + r_Trade + r_GDPpercap +
+        s_GDPcurr + s_Trade + s_GDPpercap
+      | pair + receiver + sender + year, 
+      data = practical_test_data[!practical_test_data$pair %in% high_impact_50$pair,])
+
+# investigate the top 50 influential pairs
+# mean and sd
+practical_test_data[practical_test_data$pair %in% high_impact_50$pair,] %>% ungroup() %>%
+                    summarize(across(c("t_adjusted","t_naive"), list(mean= ~ mean(.x, na.rm = TRUE), sd=~ sd(.x, na.rm = TRUE))
+                                     ,.names = "{.fn}_{.col}"))
+
+# visualization 
+practical_test_data <- practical_test_data %>% group_by(pair) %>% mutate(vbreak = case_when(is.na(lag(prediction, n=1L)) & !is.na(prediction)~ 1,
+                                                                          .default=NA))
+
+ggplot(data = practical_test_data[practical_test_data$pair %in% high_impact_50$pair,], aes(x=year)) +
+        geom_line(aes(y=t_naive)) + geom_line(aes(y=t_adjusted), linetype=6)+ geom_point(aes(y=vbreak, x=year)) +
+        facet_wrap(~pair, scales = "free")

@@ -1,15 +1,17 @@
 #### prediction performance ####
 #mean average difference (MAD) between target vintage and predictor vintage (naive approach)
-addition <- prediction_train_tdiff %>% group_by(run) %>% summarize(MAD=mean(abs(dep_var-predictor))) 
+addition <- prediction_train_tdiff %>% group_by(run) %>% summarize(NaiveR2 = 1-(sum((dep_var-predictor)^2)/sum((dep_var-mean(dep_var, na.rm=T))^2)),
+                                                                   NaiveMAE = mean(abs(dep_var-predictor))) 
 
 prediction_summary_tdiff <- cbind(prediction_summary_tdiff,addition)  %>%
   mutate(TrainR2 = round(TrainR2, digits = 2),
          TestR2 = round(TestR2, digits=2),
-         across(c(MAD,TrainRMSE,TrainMAE,TestRMSE,TestMAE), ~round(.x,digits = 0)),
+         NaiveR2 = round(NaiveR2, digits=2),
+         across(c(NaiveMAE,TrainRMSE,TrainMAE,TestRMSE,TestMAE), ~round(.x,digits = 0)),
          target_vintage = c("IN BMD3", "IN BMD3", "IN BMD3", "OUT BMD3", "OUT BMD3", "IN BMD4"),
          predictor_vintage = c("IN BMD4", "OUT BMD4", "OUT BMD3", "IN BMD4", "OUT BMD4", "OUT BMD4")) 
 
-prediction_summary_tdiff <- prediction_summary_tdiff[,c("target_vintage", "predictor_vintage", "MAD","TrainR2" ,"TrainRMSE", "TrainMAE", "TestR2" ,"TestRMSE", "TestMAE")]
+prediction_summary_tdiff <- prediction_summary_tdiff[,c("target_vintage", "predictor_vintage", "NaiveR2","NaiveMAE","TrainR2" ,"TrainRMSE", "TrainMAE", "TestR2" ,"TestRMSE", "TestMAE")]
 write.csv(prediction_summary_tdiff, row.names=F) #output for paper
 
 #### best tunes ####
