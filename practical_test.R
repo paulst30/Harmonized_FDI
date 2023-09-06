@@ -47,19 +47,19 @@ practical_test_data <- data %>% merge(.,prediction_obs, by = c("s_iso3c", "r_iso
                                  rename(receiver = r_iso3c,
                                         sender = s_iso3c,
                                         pair = des_pair) %>%
-                                 mutate(naive = case_when(!is.na(OECD_IN_BMD3) ~ OECD_IN_BMD3*1000000,
+                                 mutate(naive1 = case_when(!is.na(OECD_IN_BMD3) ~ OECD_IN_BMD3*1000000,
                                                           is.na(OECD_IN_BMD3) & !is.na(OECD_OUT_BMD3) ~ OECD_OUT_BMD3*1000000,
                                                           is.na(OECD_IN_BMD3) & is.na(OECD_OUT_BMD3) & !is.na(IN_BMD4) ~ IN_BMD4*1000000,
                                                           is.na(IN_BMD4) & is.na(OECD_IN_BMD3) & is.na(OECD_OUT_BMD3) & !is.na(OUT_BMD4) ~ OUT_BMD4*1000000),
-                                        adjusted = case_when(!is.na(naive) & is.na(prediction) ~ naive,
-                                                             !is.na(naive) & !is.na(prediction) ~ prediction*1000000
+                                        adjusted1 = case_when(!is.na(naive1) & is.na(prediction) ~ naive1,
+                                                             !is.na(naive1) & !is.na(prediction) ~ prediction*1000000
                                                             ),
                                         r_GDPcurr=r_GDPcurr*100/deflator_USD,
                                         s_GDPcurr=s_GDPcurr*100/deflator_USD,
                                         r_GDPpercap=r_GDPpercap*100/deflator_USD,
                                         s_GDPpercap=s_GDPpercap*100/deflator_USD,
-                                        naive=naive*100/deflator_USD,
-                                        adjusted=adjusted*100/deflator_USD,
+                                        naive=naive1*100/deflator_USD,
+                                        adjusted=adjusted1*100/deflator_USD,
                                         IN_BMD4=IN_BMD4*1000000*100/deflator_USD,
                                         across(c("r_GDPcurr", "s_GDPcurr"), ~ log(.x*1000000)),
                                         across(c("r_GDPpercap", "s_GDPpercap"), ~ log(.x*1000000)),
@@ -83,14 +83,14 @@ list_plot[[1]] <- practical_test_data[practical_test_data$fin_center==0 ,] %>% g
                   summarize(naive = sum(naive),
                             harmonized = sum(adjusted)) %>%
                   pivot_longer(c(naive, harmonized), names_to = "series", values_to = "FDI") %>%
-                  ggplot(aes(x=year, y=FDI)) +  
-                  geom_line(aes(linetype=series)) +  theme(legend.position = "none")
+                  ggplot(aes(x=year, y=FDI/1000000000)) +  #FDI stock in billion USD
+                  geom_line(aes(linetype=series)) +  theme(legend.position = "none") + ylab("FDI")
 
 list_plot[[2]] <- practical_test_data[practical_test_data$fin_center==1 ,] %>% group_by(year) %>%
                   summarize(naive = sum(naive),
                             harmonized = sum(adjusted)) %>%
                   pivot_longer(c(naive, harmonized), names_to = "series", values_to = "FDI") %>%
-                  ggplot(aes(x=year, y=FDI)) +  
+                  ggplot(aes(x=year, y=FDI/1000000000)) +  
                   geom_line(aes(linetype=series)) + labs(linetype="Series") + theme(axis.title.y=element_blank()) #remove y axis labels
   
 
@@ -103,7 +103,7 @@ list_plot[[3]] <- practical_test_data[practical_test_data$fin_center==0 & !is.na
                                                      run==6 ~ "OUT BMD4 -> IN BMD4")) %>%
                   group_by(year, task) %>%
                   summarize(diff = sum(adjusted-naive)) %>% 
-                  ggplot(aes(x=year, y=diff, fill=task)) + 
+                  ggplot(aes(x=year, y=diff/1000000000, fill=task)) + 
                   geom_col(position = "stack") + theme(legend.position = "none") + labs(y="Adjustment")
 
 
@@ -116,7 +116,7 @@ list_plot[[4]] <- practical_test_data[practical_test_data$fin_center==1 & !is.na
                                           run==6 ~ "OUT BMD4 -> IN BMD4")) %>%
                   group_by(year, task) %>%
                   summarize(diff = sum(adjusted-naive)) %>% 
-                  ggplot(aes(x=year, y=diff, fill=task)) + 
+                  ggplot(aes(x=year, y=diff/1000000000, fill=task)) + 
                   geom_col(position = "stack") + theme(axis.title.y=element_blank()) + labs(fill="Prediction task")
 
 #combine all graphs

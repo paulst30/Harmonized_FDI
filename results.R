@@ -43,10 +43,10 @@ list_plot_2 <- list() #second column in final graph
 
 #loop over each prediction task, plot two graphs and save in the lists
 for (i in 1:6) { 
-list_plot_1[[i]] <- ggplot(data = prediction_train_tdiff[prediction_train_tdiff$run==i,]) + geom_jitter(aes(y=dep_var, x=predictor)) +
+list_plot_1[[i]] <- ggplot(data = prediction_train_tdiff[prediction_train_tdiff$run==i,]) + geom_jitter(aes(y=dep_var/1000, x=predictor/1000)) + #FDI in billion USD
   labs(x=prediction_tasks[i,2],y=prediction_tasks[i,1])
 
-list_plot_2[[i]] <- ggplot(data = prediction_train_tdiff[prediction_train_tdiff$run==i,]) + geom_jitter(aes(y=dep_var, x=prediction)) +
+list_plot_2[[i]] <- ggplot(data = prediction_train_tdiff[prediction_train_tdiff$run==i,]) + geom_jitter(aes(y=dep_var/1000, x=prediction/1000)) +
   labs(x="prediction",y="") +
   theme(axis.text.y=element_blank(),  #remove y axis labels
         axis.ticks.y=element_blank())  #remove y axis ticks
