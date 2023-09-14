@@ -61,8 +61,8 @@ practical_test_data <- data %>% merge(.,prediction_obs, by = c("s_iso3c", "r_iso
                                         naive=naive1*100/deflator_USD,
                                         adjusted=adjusted1*100/deflator_USD,
                                         IN_BMD4=IN_BMD4*1000000*100/deflator_USD,
-                                        across(c("r_GDPcurr", "s_GDPcurr"), ~ log(.x*1000000)),
-                                        across(c("r_GDPpercap", "s_GDPpercap"), ~ log(.x*1000000)),
+                                        across(c("r_GDPcurr", "s_GDPcurr"), ~ log(.x*1000000),.names = "ln_{.col}"),
+                                        across(c("r_GDPpercap", "s_GDPpercap"), ~ log(.x*1000000),.names = "ln_{.col}"),
                                         t_naive=asinh(naive),
                                         t_adjusted=asinh(adjusted),
                                         ln_naive=log(naive),
@@ -199,43 +199,155 @@ write.csv(etable(simple_model, simple_model_r, simple_model_rs,
                  style.df = style.df(fixef.title = "",
                              fixef.suffix = " fixed effect", yesNo = "yes")))
 
-#### Effect on DTT ####
-simple_model_test <- feols(fml = t_naive ~ BIT + PTA + DTT +
-                             r_GDPcurr + r_Trade + r_GDPpercap  
-                           | pair + receiver + sender^year + year, 
-                           data = practical_test_data)
+# significant effects
 
-# isolate scores for the observations
-n_scores <- simple_model_r$`lhs: t_naive`$scores[,3]
-a_scores <- simple_model_r$`lhs: t_adjusted`$scores[,3]
+#create additional features
+sinks <- unique(data$s_iso3c[data$s_sink==1])
+conduits <- unique(data$r_iso3c[data$r_conduit==1])
+eu_offshore_centres <- c(
+  "AND", "ATG", "AIA", "ABW", "BRB", "BHR", "BMU", "BHS", "BLZ", "COK",
+  "CUW", "CYM", "DMA", "GRD", "GGY", "GIB", "HKG", "IMN", "JEY", "KNA",
+  "LBN", "LCA", "LIE", "LBR", "MHL", "MSR", "MUS", "NRU", "NIU", "PAN",
+  "PHL", "SYC", "SGP", "SXM", "TCA", "VCT", "VGB", "VIR", "VUT", "WSM"
+)
+eastern_eu_member_states <- c(
+  "BGR", "HRV", "CZE", "EST", "HUN", "LTU", "LVA", "POL", "ROU", "SVK", "SVN"
+)
+eu_member_states <- c(
+  "AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA",
+  "DEU", "GRC", "HUN", "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD",
+  "POL", "PRT", "ROU", "SVK", "SVN", "ESP", "SWE"
+)
 
-cooks_data <- data.frame(practical_test_data[simple_model_test$obs_selection$obsRemoved,], n_scores=n_scores, a_scores=a_scores) %>%
-              mutate(change=a_scores-n_scores)
+# practical_test_data <- mutate(practical_test_data, 
+#                                s_GDPpercap = s_GDPcurr*1000000/s_pop,
+#                                r_GDPpercap = r_GDPcurr*1000000/r_pop)
 
-# percentiles for change
-ecdf_change <- ecdf(cooks_data$change)
-ecdf_change(-1)
+HIC <- unique(practical_test_data$sender[practical_test_data$year==2015 & practical_test_data$s_GDPpercap>=12275])
+LIC <- unique(practical_test_data$receiver[practical_test_data$year==2015 & practical_test_data$r_GDPpercap<=4035])
 
-# identify the 50 highest impact pairs
-high_impact_50 <- cooks_data %>% arrange(desc(-change)) %>% distinct(pair) %>% head(n=50)
+practical_test_data <- mutate(practical_test_data,
+                        s_fin_center = case_when(sender %in% conduits |  sender %in% sinks ~ 1,
+                                                 .default = 0),
+                        r_fin_center = case_when(receiver %in% conduits ~ 1,
+                                                 .default = 0),
+                        EU = case_when(sender %in% eu_member_states | receiver %in% eu_member_states ~ 1,
+                                       .default = 0),
+                        r_EasternEU = case_when( receiver %in% eastern_eu_member_states ~1,
+                                              .default = 0),
+                        r_offshore = case_when(receiver %in% eu_offshore_centres ~1,
+                                               .default = 0),
+                        s_HIC = case_when(sender %in% HIC ~ 1,
+                                          .default = 0),
+                        r_HIC = case_when(receiver %in% HIC ~ 1,
+                                         .default = 0),
+                        s_LIC = case_when(sender %in%  LIC ~ 1,
+                                          .default = 0),
+                        r_LIC = case_when(receiver %in% LIC ~ 1,
+                                          .default = 0),
+                        year2009 = case_when(year >= 2009 ~ 1,
+                                            .default = 0)) 
 
-#test run excluding highest influential pairs
-feols(fml = c(t_naive ,t_adjusted) ~ BIT + PTA + DTT  +
-        r_GDPcurr + r_Trade + r_GDPpercap +
-        s_GDPcurr + s_Trade + s_GDPpercap
-      | pair + receiver + sender + year, 
-      data = practical_test_data[!practical_test_data$pair %in% high_impact_50$pair,])
 
-# investigate the top 50 influential pairs
-# mean and sd
-practical_test_data[practical_test_data$pair %in% high_impact_50$pair,] %>% ungroup() %>%
-                    summarize(across(c("t_adjusted","t_naive"), list(mean= ~ mean(.x, na.rm = TRUE), sd=~ sd(.x, na.rm = TRUE))
-                                     ,.names = "{.fn}_{.col}"))
 
-# visualization 
-practical_test_data <- practical_test_data %>% group_by(pair) %>% mutate(vbreak = case_when(is.na(lag(prediction, n=1L)) & !is.na(prediction)~ 1,
-                                                                          .default=NA))
+# testing for significance with 'stacked' equation
 
-ggplot(data = practical_test_data[practical_test_data$pair %in% high_impact_50$pair,], aes(x=year)) +
-        geom_line(aes(y=t_naive)) + geom_line(aes(y=t_adjusted), linetype=6)+ geom_point(aes(y=vbreak, x=year)) +
-        facet_wrap(~pair, scales = "free")
+stacked <- practical_test_data %>% select(t_naive, t_adjusted, BIT, PTA, DTT, r_fin_center, s_fin_center, r_offshore, s_HIC, r_HIC, r_LIC, EU, r_EasternEU, sender, receiver, pair, year) %>%
+  pivot_longer(cols=c("t_naive","t_adjusted"), names_to = "series", values_to = "FDI") %>%
+  mutate(ind = case_when(series=="t_adjusted" ~1,
+                                  .default =0),
+         across(c("BIT", "PTA", "DTT", "r_fin_center", "s_fin_center", "s_HIC", "r_HIC", "r_LIC", "EU"), ~case_when(ind==1 ~ .x,
+                                   .default = 0), .names = "ad_{.col}"))
+
+# simple_model_stacked <- feols(fml = FDI ~ BIT + BIT:r_fin_center + BIT:s_fin_center + PTA + DTT +
+#                                           ad_BIT + ad_BIT:ad_r_fin_center + ad_BIT:ad_s_fin_center + ad_PTA + ad_DTT | 
+#                                           ind^pair + ind^receiver^year + ind^sender^year, 
+#                               data = stacked)
+
+indices <- stacked %>% ungroup() %>% transmute(fullsample = 1,
+                                               EU = EU,
+                                               #EU_after_2009 = ifelse(EU==1 & year >=2009,1,0),
+                                               HIC_HIC = ifelse(s_HIC==1 & r_HIC==1,1,0),
+                                               #HIC_HIC_2009 = ifelse(s_HIC==1 & r_HIC==1 & year >=2009,1,0),
+                                               HIC_LIC = ifelse(s_HIC==1 & r_LIC==1,1,0) ,
+                                               #HIC_LIC_2009 = ifelse(s_HIC==1 & r_LIC==1 & year>=2009,1,0)
+                                               s_fin_center = ifelse(s_fin_center==1,1,0),
+                                               r_fin_center = ifelse(r_fin_center==1,1,0),
+                                               r_offshore = r_offshore
+                                               )
+vars <- c("BIT", "DTT", "PTA")
+test <- matrix(nrow=ncol(indices),ncol=length(vars))
+
+for (i in 1:ncol(indices)) {
+  subset <- as.numeric(indices[[i]])
+  simple_model_stacked <- feols(fml = FDI ~ BIT + BIT:r_fin_center + BIT:s_fin_center + PTA + DTT + 
+                                ind:BIT + ind:BIT:r_fin_center + ind:BIT:s_fin_center + ind:PTA + ind:DTT | 
+                                ind^pair + ind^receiver^year + ind^sender^year, 
+                              data = stacked[subset==1,],
+                              vcov = ~pair)
+
+
+
+
+for (j in 1:length(vars)) {
+ #naive coefficient 
+if (simple_model_stacked$coeftable[vars[j],4] > 0.1) {
+  stars1 <- ""
+} else if (simple_model_stacked$coeftable[vars[j],4] < 0.1 & simple_model_stacked$coeftable[vars[j],4] >= 0.05) {
+  stars1 <- "."
+} else if (simple_model_stacked$coeftable[vars[j],4] < 0.05 & simple_model_stacked$coeftable[vars[j],4] >= 0.01) {
+  stars1 <- "*"
+} else if (simple_model_stacked$coeftable[vars[j],4] < 0.01 & simple_model_stacked$coeftable[vars[j],4] >= 0.001) {
+  stars1 <- "**"
+} else if (simple_model_stacked$coeftable[vars[j],4] < 0.001) {
+  stars1 <- "***"
+}
+
+#adjusted coefficient
+
+#how about adjustment of degrees of freedom? -> how is clustered cov-variance matrix obtained? 
+coef_sum <- simple_model_stacked$coeftable[vars[j],1]+simple_model_stacked$coeftable[paste(vars[j],":ind", sep=""),1]
+se_sum <- sqrt(simple_model_stacked$cov.scaled[vars[j],vars[j]]+simple_model_stacked$cov.scaled[paste(vars[j],":ind", sep=""),paste(vars[j],":ind", sep="")] -2*simple_model_stacked$cov.scaled[vars[j],paste(vars[j],":ind", sep="")])
+p_value <- 2*(1 - pt(abs(coef_sum/se_sum), simple_model_stacked$nobs-simple_model_stacked$nparams))
+
+if (p_value > 0.1) {
+  stars2 <- ""
+} else if (p_value < 0.1 & p_value >= 0.05) {
+  stars2 <- "."
+} else if (p_value < 0.05 & p_value >= 0.01) {
+  stars2 <- "*"
+} else if (p_value < 0.01 & p_value >= 0.001) {
+  stars2 <- "**"
+} else if (p_value < 0.001) {
+  stars2 <- "***"
+}
+
+
+
+#difference
+if (simple_model_stacked$coeftable[paste(vars[j],":ind", sep=""),4] > 0.1) {
+  stars3 <- ""
+} else if (simple_model_stacked$coeftable[paste(vars[j],":ind", sep=""),4] < 0.1 & simple_model_stacked$coeftable[paste(vars[j],":ind", sep=""),4] >= 0.05) {
+  stars3 <- "."
+} else if (simple_model_stacked$coeftable[paste(vars[j],":ind", sep=""),4] < 0.05 & simple_model_stacked$coeftable[paste(vars[j],":ind", sep=""),4] >= 0.01) {
+  stars3 <- "*"
+} else if (simple_model_stacked$coeftable[paste(vars[j],":ind", sep=""),4] < 0.01 & simple_model_stacked$coeftable[paste(vars[j],":ind", sep=""),4] >= 0.001) {
+  stars3 <- "**"
+} else if (simple_model_stacked$coeftable[paste(vars[j],":ind", sep=""),4] < 0.001) {
+  stars3 <- "***"
+}
+
+  
+test[i,j] <- paste(round(simple_model_stacked$coeftable[vars[j],1], digits = 3)," [", round(simple_model_stacked$coeftable[vars[j],2], digits = 3),"]", stars1, " ",
+                   round(coef_sum, digits = 3)," [", round(se_sum, digits = 3),"]", stars2, " ",
+                   round(simple_model_stacked$coeftable[paste(vars[j],":ind", sep=""),1], digits = 3)," [", round(simple_model_stacked$coeftable[paste(vars[j],":ind", sep=""),2], digits = 3),"]", stars3,
+                   sep="")  
+  }
+}
+
+colnames(test) <- vars
+rownames(test) <- colnames(indices)
+
+write.csv(test, row.names = T)
+
+
